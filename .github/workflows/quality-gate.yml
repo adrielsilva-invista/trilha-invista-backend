@@ -1,0 +1,66 @@
+name: quality-gate
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev, 'feat/**']
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ─────────────────────────────────────────────────────────────────
+      # Setup de stack — ajustar conforme o projeto. Comentar/descomentar.
+      # ─────────────────────────────────────────────────────────────────
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # compliance-grep.sh usa python3 (já vem no ubuntu-latest).
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Make harness scripts executable
+        run: chmod +x .harness/quality-gate.sh .harness/collectors/*.sh
+
+      - name: Run Quality Gate
+        id: gate
+        run: ./.harness/quality-gate.sh | tee /tmp/gate.log
+
+      - name: Upload baseline + metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-artifacts
+          path: |
+            plan-build/baseline.json
+            /tmp/metrics.json
+            /tmp/gate.log
+
+      - name: Comment PR with gate summary
+        if: github.event_name == 'pull_request' && always()
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ### Quality Gate
+            Status: `${{ job.status }}`
+            <details><summary>Saída do gate</summary>
+
+            ```
+            $(cat /tmp/gate.log 2>/dev/null || echo 'sem log')
+            ```
+            </details>

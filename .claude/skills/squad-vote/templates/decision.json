@@ -1,0 +1,35 @@
+{
+  "$schema": "decision.v2",
+  "question_id": "<YYYY-MM-DD>_<NNN>",
+  "question": "<pergunta exata feita ao /squad-vote>",
+  "context": "<contexto curto: arquivo/linha/sprint/task>",
+  "classification": "tecnica",
+  "destructive_detected": false,
+  "destructive_pattern": null,
+  "squads_invited": [
+    "squad-backend",
+    "squad-arquitetura",
+    "squad-finops"
+  ],
+  "tiebreaker_squad": "squad-arquitetura",
+  "votes": [
+    "<vote_id_1>",
+    "<vote_id_2>",
+    "<vote_id_3>"
+  ],
+  "tally": {
+    "A": 0,
+    "B": 0
+  },
+  "winner": "A",
+  "synthesis": null,
+  "tiebreaker_used": false,
+  "average_confidence": 0.0,
+  "mode": "dry_run",
+  "humano_consultado": true,
+  "humano_choice": null,
+  "humano_match": null,
+  "applied_in": "<sprint-N.task-X | nao_aplicado>",
+  "created_at": "<ISO-8601>",
+  "notes": "<observacoes pertinentes>"
+}

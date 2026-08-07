@@ -1,0 +1,26 @@
+{
+  "$schema": "vote.v1",
+  "vote_id": "<YYYY-MM-DD>_<NNN>_<squad>",
+  "question_id": "<YYYY-MM-DD>_<NNN>",
+  "squad": "squad-<nome>",
+  "options_evaluated": [
+    {
+      "id": "A",
+      "label": "<descricao curta da opcao A>"
+    },
+    {
+      "id": "B",
+      "label": "<descricao curta da opcao B>"
+    }
+  ],
+  "choice": "A",
+  "rationale": "<por que essa opcao venceu na perspectiva do squad>",
+  "evidence": [
+    "<arquivo:linha ou referencia ao standard/spec>"
+  ],
+  "confidence": 0.0,
+  "concerns": [
+    "<riscos conhecidos da escolha, se houver>"
+  ],
+  "created_at": "<ISO-8601>"
+}

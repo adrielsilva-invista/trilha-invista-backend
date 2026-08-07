@@ -1,0 +1,22 @@
+# deps
+node_modules/
+
+# build
+dist/
+
+# test / coverage
+coverage/
+/tmp/
+
+# jscpd report
+report/
+.jscpd-report/
+
+# env
+.env
+.env.*
+!.env.example
+
+# editor / os
+.DS_Store
+*.log

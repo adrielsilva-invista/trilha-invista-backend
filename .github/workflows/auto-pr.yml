@@ -1,0 +1,55 @@
+name: auto-pr
+
+# Encadeia PRs quando o quality-gate passa num push:
+#   feat/**  --(gate verde)-->  PR para dev
+#   dev      --(gate verde)-->  PR para main
+# Merge é sempre manual (este workflow só ABRE o PR, nunca faz merge).
+
+on:
+  workflow_run:
+    workflows: [quality-gate]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    # Só age se o gate passou E foi um push de branch (não um PR).
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    steps:
+      - name: Resolver branch de origem e alvo
+        id: route
+        run: |
+          HEAD="${{ github.event.workflow_run.head_branch }}"
+          if [[ "$HEAD" == feat/* ]]; then
+            echo "base=dev" >> "$GITHUB_OUTPUT"
+          elif [[ "$HEAD" == "dev" ]]; then
+            echo "base=main" >> "$GITHUB_OUTPUT"
+          else
+            echo "Branch '$HEAD' não encadeia PR. Encerrando."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "head=$HEAD" >> "$GITHUB_OUTPUT"
+
+      - name: Abrir PR (se não existir)
+        if: steps.route.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD: ${{ steps.route.outputs.head }}
+          BASE: ${{ steps.route.outputs.base }}
+          REPO: ${{ github.repository }}
+        run: |
+          existing=$(gh pr list --repo "$REPO" --head "$HEAD" --base "$BASE" --state open --json number --jq 'length')
+          if [[ "$existing" -gt 0 ]]; then
+            echo "PR $HEAD -> $BASE já existe. Nada a fazer."
+            exit 0
+          fi
+          gh pr create --repo "$REPO" \
+            --head "$HEAD" --base "$BASE" \
+            --title "auto: $HEAD -> $BASE" \
+            --body "PR aberto automaticamente após quality-gate verde em \`$HEAD\`. Merge é manual."
