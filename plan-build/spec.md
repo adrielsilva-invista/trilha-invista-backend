@@ -1,74 +1,98 @@
-# spec.md — <PREENCHER NOME DO PROJETO>
+# spec.md — Classificador Inteligente de Chamados
 
 > Documento vivo de produto e arquitetura. Atualizar quando uma decisão de produto ou arquitetural mudar.
 > Esta é a fonte da verdade que `/harness` consulta para entender o "porquê" do projeto.
 >
-> ⚠️ **Antes de tudo:** este projeto se encaixa nos padrões de `plan-build/standards/`.
-> Em particular, **`standards/barramento-worker.md`** define o padrão do Worker NATS do Barramento BSN (NATS pub/sub, Postgres+EF Core, gRPC/Protobuf nos contratos). Identifique o papel deste projeto antes de preencher a seção 2.
+> Produto detalhado em `prd.md` (raiz). Este spec traduz o PRD em **arquitetura executável**.
 
 ---
 
 ## 0. Papel deste projeto no Barramento
 
-> Resposta obrigatória antes de codar. Ver `plan-build/standards/barramento-worker.md`.
+> Ver `plan-build/standards/barramento-worker.md`.
 
-- **Papel:** <Cliente Solicitante / API REST adapter / Worker NATS / Outro>
-- **Bordas externas (gRPC):** <listar contratos `.proto` ou "nenhuma">
-- **Bordas externas (REST):** <listar OpenAPI ou "nenhuma">
-- **Tópicos NATS pub/sub:** <listar ou "nenhum">
-- **Persistência:** <Postgres? Redis? Quais coleções/tabelas?>
+- **Papel:** **Nenhum.** Este projeto **não é** um worker NATS do Barramento BSN. É um backend REST NestJS standalone (trilha de onboarding).
+- **Bypass de `barramento-worker.md`:** legítimo — o próprio standard exclui "Adaptadores REST síncronos" e "Workers que não vão pro barramento BSN". Nenhum acoplamento a NATS/gRPC/Shared se aplica.
+- **Bordas externas (gRPC):** nenhuma.
+- **Bordas externas (REST):** API REST própria (auth + chamados + usuários), consumida pelo frontend Next.js (fora deste repo).
+- **Tópicos NATS pub/sub:** nenhum. A fila interna de classificação usa **BullMQ + Redis** (ver §3), não NATS.
+- **Persistência:** PostgreSQL via Prisma.
 
 ---
 
 ## 1. Visão do produto
 
-- **O que é:** <PREENCHER>
-- **Por que existe:** <PREENCHER — problema sendo resolvido>
-- **Quem usa:** <PREENCHER — perfil do usuário final>
-- **Valor central (uma frase):** <PREENCHER>
+- **O que é:** backend de um sistema que recebe chamados em texto livre e usa IA (Claude) para classificá-los (categoria, área, prioridade, sentimento, resumo), atribuindo automaticamente ao funcionário de menor carga.
+- **Por que existe:** eliminar a triagem manual inicial de chamados. Dor é hipótese de portfólio (ver `prd.md` §2).
+- **Quem usa:** Cliente (abre/acompanha chamados), Funcionário (revisa/reclassifica/resolve), Admin (cria usuários, cancela chamados).
+- **Valor central (uma frase):** classificar chamado por IA sem bloquear o cliente, mantendo humano no loop para corrigir.
 
 ---
 
 ## 2. Microsserviços / Componentes
 
-> Listar cada componente em primeiro nível. Para cada um, repetir o bloco abaixo.
+> Serviço único (monolito modular NestJS). Não há microsserviços — single-instance por decisão de escopo (`prd.md` §6).
 
-### `<NOME-DO-SERVICO>`
+### `trilha-invista-backend`
 
-- **Responsabilidade:** <uma frase>
-- **Fluxo:** <entrada → processamento → saída>
-- **Componentes internos:** <controllers, services, repos, workers, etc — preencher conforme stack>
-- **Bloqueios ativos:** <ou "nenhum">
+- **Responsabilidade:** expor a API REST e rodar o worker de classificação in-process.
+- **Fluxo:** `cliente abre chamado (HTTP) → persiste AGUARDANDO_CLASSIFICACAO → enfileira (BullMQ) → worker chama Claude → classifica + atribui → ABERTO → funcionário revisa`.
+- **Componentes internos (módulos Nest, 1 por domínio):**
+  - `auth` — login, guard de perfil (RF-01).
+  - `usuario` — admin cria usuário (RF-02).
+  - `chamado` — abrir, listar, ciclo de status, reclassificar (RF-03, RF-08, RF-09, RF-10).
+  - `classificacao` — fila + worker + gateway Claude + atribuição (RF-04, RF-05, RF-06, RF-07). **Sprint-2.**
+  - `historico` — log de eventos append-only (RF-11). **Sprint-2.**
+- **Bloqueios ativos:** Anexo A do PRD (matriz de taxonomia) — bloqueia a **correção semântica** da classificação (RF-04), não o código. Decisão de stakeholder.
 
 ---
 
 ## 3. Arquitetura
 
 - **Padrão arquitetural:** **Clean Architecture** — obrigatório por default. Ver `plan-build/standards/clean-architecture.md`.
-  - Se este projeto **não tem domínio de negócio** (frontend puro, workflow n8n, script utilitário, dashboard só-leitura), apague esta linha e escreva no lugar:
-    `Bypass de Clean Architecture. Motivo: <uma linha — ex.: "frontend puro, sem lógica de negócio".>`
+  - **Adaptação .NET → NestJS** (o standard é escrito para .NET com 4 `.csproj`; aqui não há projetos separados). Mapeamento:
+
+    | Camada (standard) | Aqui (NestJS) | Regra de dependência |
+    |---|---|---|
+    | Domain (Entities) | `src/<dominio>/domain/` | só ela mesma + stdlib. **Zero** import de `@nestjs/*`, `@prisma/*`, `@anthropic-ai/*`, `bullmq` |
+    | Application (Use Cases) | `src/<dominio>/application/` (+ `ports/` = interfaces) | importa só `domain/`. Sem framework, sem I/O concreto |
+    | Interface Adapters | `src/<dominio>/*.controller.ts` + `infrastructure/*.repo.ts` | conhece application + domain |
+    | Frameworks & Drivers | `*.module.ts`, Prisma client, gateway Claude, BullMQ | borda externa |
+
+  - **Screaming Architecture:** a raiz de `src/` grita o domínio (`auth/`, `usuario/`, `chamado/`, `classificacao/`, `historico/`), não o framework.
+  - **Boundaries** (dependência externa → interface na application, implementação na infrastructure):
+
+    | Dependência externa | Port (interface) | Implementação |
+    |---|---|---|
+    | Banco | `ChamadoRepository` etc. | `PrismaChamadoRepository` |
+    | Relógio | `Clock` | `SystemClock` |
+    | Classificador IA | `ClassificadorGateway` | `ClaudeClassificadorGateway` (Sprint-2) |
+    | Fila | `FilaClassificacao` | `BullmqFilaClassificacao` (Sprint-2) |
+
+  - **Isolamento verificado por compliance-grep** folder-scoped (`only_in: src/**/domain/**` e `src/**/application/**`) — ver `quality-gate.md` §3. Ativado agora que a estrutura de pastas está definida.
 - **Padrões de código:** **Clean Code** — obrigatório por default. Ver `plan-build/standards/clean-code.md`.
-  - Se este projeto **não tem código humano-escrito** (workflow visual puro, arquivo de config gerado por tool), apague esta linha e escreva no lugar:
-    `Bypass de Clean Code. Motivo: <uma linha — ex.: "workflow n8n, sem código humano-escrito".>`
-- **Padrões de comunicação:** <síncrono REST, async via fila, gRPC, etc>
+- **Padrões de comunicação:**
+  - **Síncrono REST** — cliente ↔ backend.
+  - **Assíncrono via fila** — abertura de chamado → classificação (BullMQ/Redis). A resposta HTTP nunca espera a IA (RF-06).
 - **Modelo de dados:**
-  - **Banco:** <PostgreSQL, MySQL, Mongo, etc>
-  - **ORM/Driver:** <PREENCHER>
-  - **Migrations:** <PREENCHER ferramenta>
-- **Autenticação/Autorização:** <PREENCHER>
-- **Observabilidade:** <logs estruturados, traces, métricas — preencher>
+  - **Banco:** PostgreSQL.
+  - **ORM/Driver:** Prisma.
+  - **Migrations:** Prisma Migrate.
+- **Autenticação/Autorização:** JWT (login retorna token); RBAC por perfil (Cliente/Funcionário/Admin) via guard no backend. Cliente vê só os próprios chamados; funcionário opera só chamados atribuídos a ele (proteção contra IDOR → 403).
+- **Observabilidade:** Logger do Nest (JSON estruturado). Log de falha de classificação e de rate limit (RF-05, `prd.md` §7). Sem `console.*` (compliance-grep).
 
 ---
 
 ## 4. Regras transversais
 
-- **Stack declarada:** <linguagem + versão, framework + versão, runtime + versão>
-- **Padrões proibidos (compliance-grep):** ver `plan-build/quality-gate.md` seção "Padrões proibidos".
-- **Secrets:** sempre via `.env` (não commitado) ou env var no CI. Nunca hardcoded.
-- **Logs:** sempre estruturados (JSON), nunca `print`/`console.log` cru em produção.
-- **Tratamento de erro:** explícito, sem `catch` vazio.
-- **Idempotência:** endpoints/jobs idempotentes via `request_id` ou `correlation_id`.
-- **CNPJ (se aplicável):** projeto que valida/recebe/persiste CNPJ segue `standards/cnpj-alfanumerico.md` (formato alfanumérico, IN RFB 2.229/2024 — jul/2026) e ativa o bloco `cnpj_alfanumerico` no `quality-gate.md` §3. CNPJ trafega como string; nunca como inteiro.
+- **Stack declarada:** TypeScript 5.7 + NestJS 11 sobre Node 20+. Prisma (Postgres). BullMQ + Redis (fila). `@anthropic-ai/sdk` (classificação, Sprint-2). Jest (ts-jest).
+- **Padrões proibidos (compliance-grep):** ver `plan-build/quality-gate.md` §3.
+- **Secrets:** sempre via `.env` (não commitado) ou env var no CI. Nunca hardcoded. `ANTHROPIC_API_KEY` fora do repo e do frontend.
+- **Logs:** estruturados via Logger do Nest, nunca `console.log` cru.
+- **Tratamento de erro:** `HttpException` do Nest ou exception de domínio específica, nunca `throw new Error(...)` genérico nem `catch` vazio.
+- **Idempotência:** worker de classificação idempotente por `chamado_id`; reconfirma elegibilidade antes de persistir (RF-06).
+- **Entrada não confiável:** texto do chamado é conteúdo a classificar, nunca instrução ao modelo (defesa contra prompt injection, RF-04).
+- **CNPJ:** **não aplicável** — o produto não valida/recebe/persiste CNPJ. Bloco `cnpj_alfanumerico` do `quality-gate.md` §3 permanece inerte.
 
 ---
 
@@ -78,7 +102,7 @@ Uma TASK só está pronta quando TODOS os itens abaixo são verdadeiros:
 
 - [ ] Build limpo, sem warnings.
 - [ ] Testes da área tocada passando.
-- [ ] `./.harness/quality-gate.sh` retorna exit 0.
+- [ ] `bash .harness/quality-gate.sh` retorna exit 0.
 - [ ] Reviewers automáticos (CI + LLM) sem comentários abertos.
 - [ ] Todas as conversations do PR resolvidas.
 - [ ] `plan-build/Progress.md` atualizado com a sessão.
@@ -88,10 +112,13 @@ Uma TASK só está pronta quando TODOS os itens abaixo são verdadeiros:
 
 ## 6. Variáveis de ambiente
 
-> Listar todas as env vars que o projeto consome. Sem valores reais — apenas o nome e o que representa.
-
 | Variável | O que é | Obrigatória? | Onde usada |
 |---|---|---|---|
-| `<NOME>` | <descrição> | sim/não | <serviço/componente> |
+| `DATABASE_URL` | Connection string do Postgres | sim | Prisma |
+| `JWT_SECRET` | Segredo de assinatura do token | sim | `auth` |
+| `PORT` | Porta HTTP (default 3000) | não | `main.ts` |
+| `REDIS_URL` | Connection string do Redis (fila) | sim (Sprint-2) | `classificacao` (BullMQ) |
+| `ANTHROPIC_API_KEY` | Chave da API Anthropic/Claude | sim (Sprint-2) | `classificacao` (gateway) |
+| `ANTHROPIC_TIMEOUT_MS` | Timeout por chamada ao Claude | não | `classificacao` (RF-05) |
 
 Arquivo de exemplo: `.env.example` na raiz do repositório.

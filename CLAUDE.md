@@ -60,6 +60,14 @@ Coda → Commit → Push → PR → Review (CI + LLM) → verde? ─┬─ sim �
 
 O agente que está de babysit no PR **só sai do loop com merge ou parada explícita**. Não há "vou olhar amanhã".
 
+### Granularidade: 1 TASK = 1 branch = 1 PR
+
+> **Cada TASK do Sprint vira uma branch `feat/<escopo>` própria e um único PR. Nunca agrupar TASKs numa branch só.**
+
+- Antes de codar uma TASK: `git checkout -b feat/<escopo>` a partir de `dev` (ex.: `feat/crud-chamado`).
+- Uma TASK fecha seu próprio loop de PR (feat → gate → auto-PR dev → merge manual → auto-PR main → merge manual) **antes** de começar a próxima.
+- Fatiar bem a TASK é responsabilidade do planejamento (Sprint-N.md): PR pequeno, revisável, com catraca por unidade mínima. Um PR que carrega 2+ TASKs viola isolamento e reversibilidade (Parte 1).
+
 ### Restrição de escopo no babysit
 
 Se a correção exigida pelo review tocar **outro serviço** ou exceder o escopo do PR, o agente **PARA e SINALIZA**. Não estende escopo silenciosamente. PR cresce em entropia, não em tamanho.
