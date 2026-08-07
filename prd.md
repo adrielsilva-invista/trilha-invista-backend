@@ -65,7 +65,7 @@ A unidade da métrica é o **campo**, não o chamado. Cada chamado classificado 
 
 **Por que por campo, e não por chamado (all-or-nothing):** o funcionário reclassifica **campo a campo** — se ele corrige só a `prioridade` e mantém os outros 3, o erro da IA foi de 1 campo, não do chamado inteiro. Contar por chamado trataria "errou 1" e "errou 4" como o mesmo resultado (chamado discordante), perdendo justamente o sinal de **onde** e **quanto** o modelo erra. Errar 2 campos conta como 2 discordâncias em 2 comparações — é o que permite ver que, por exemplo, `sentimento` erra muito e `categoria` quase nunca. Esse detalhamento por campo é o que alimenta o ajuste de prompt e o fine-tuning futuro.
 
-**Métrica de guarda-corpo:** a falha da IA não pode **impedir o atendimento** do chamado. Por design assíncrono o chamado já nasce sem classificação (RF-03), então a criação nunca depende da OpenAI; o guarda-corpo é que, mesmo esgotados os retries (RF-05), o chamado seja **atribuído e classificado manualmente** e siga o ciclo normal — nunca fica preso por causa da IA.
+**Métrica de guarda-corpo:** a falha da IA não pode **impedir o atendimento** do chamado. Por design assíncrono o chamado já nasce sem classificação (RF-03), então a criação nunca depende da Anthropic; o guarda-corpo é que, mesmo esgotados os retries (RF-05), o chamado seja **atribuído e classificado manualmente** e siga o ciclo normal — nunca fica preso por causa da IA.
 
 > Observação: a taxa de concordância só é mensurável **depois** que houver funcionários reclassificando volume real. Em portfólio, tratar como métrica demonstrável, não como meta de produção.
 
@@ -95,31 +95,31 @@ A unidade da métrica é o **campo**, não o chamado. Cada chamado classificado 
 ### RF-04 — Classificação automática por IA (assíncrona) · `Must`
 **História:** Como sistema, quero classificar o chamado a partir da fila, para eliminar a triagem manual sem fazer o cliente esperar a IA.
 **Critérios de aceite:**
-- Dado um chamado na fila, quando o worker o processa, então chama a OpenAI usando **Structured Outputs** (JSON Schema com os enums abaixo), garantindo resposta no formato esperado:
+- Dado um chamado na fila, quando o worker o processa, então chama a **API da Anthropic (Claude)** usando **tool use** (JSON Schema com os enums abaixo, via `tool_choice` forçado), garantindo resposta no formato esperado:
   - `categoria` ∈ `PROBLEMA_TECNICO`, `DUVIDA`, `RECLAMACAO`, `SOLICITACAO`, `OUTROS`
   - `prioridade` ∈ `BAIXA`, `MEDIA`, `ALTA`, `CRITICA`
   - `area` ∈ `ENGENHARIA`, `QUALIDADE`, `LOGISTICA`, `COMERCIAL`, `SUPORTE_TECNICO`, `OUTROS`
   - `sentimento` ∈ `POSITIVO`, `NEUTRO`, `NEGATIVO`, `FRUSTRADO`
   - `resumo` — síntese factual do problema, **máx. 300 caracteres**, sem adicionar informação que não esteja no chamado. É **read-only** (nem funcionário nem cliente editam), visível a **funcionário e admin**, **não** exibido ao cliente e **não** entra na métrica de concordância (seção 4).
-- A **semântica** de cada valor de enum (quando usar `DUVIDA` vs `SOLICITACAO`, `ALTA` vs `CRITICA`, `NEGATIVO` vs `FRUSTRADO`, fronteira `SUPORTE_TECNICO`/`ENGENHARIA`, categoria dominante quando o chamado mistura problema + reclamação) segue a **matriz de taxonomia do Anexo A**. `[ABERTO: matriz de taxonomia — definição + exemplo + contraexemplo por valor — a resolver no design técnico; quem responde: stakeholder]`. Structured Outputs garante o **formato**, não a **correção semântica** — sem a matriz, a concordância mede consistência, não acerto.
+- A **semântica** de cada valor de enum (quando usar `DUVIDA` vs `SOLICITACAO`, `ALTA` vs `CRITICA`, `NEGATIVO` vs `FRUSTRADO`, fronteira `SUPORTE_TECNICO`/`ENGENHARIA`, categoria dominante quando o chamado mistura problema + reclamação) segue a **matriz de taxonomia do Anexo A**. `[ABERTO: matriz de taxonomia — definição + exemplo + contraexemplo por valor — a resolver no design técnico; quem responde: stakeholder]`. tool use garante o **formato**, não a **correção semântica** — sem a matriz, a concordância mede consistência, não acerto.
 - O texto do chamado é **entrada não confiável**: instruções contidas no texto do cliente **não** podem alterar o schema, as regras de classificação ou o prompt de sistema (defesa contra prompt injection).
-- Dada a resposta, quando validada no backend, então cada campo é confirmado dentro do enum. Com Structured Outputs o enum já é garantido pelo schema; a validação no backend é **rede de segurança** (defesa em profundidade), não o caminho de falha esperado. Valor fora do enum, se ocorrer, é tratado como falha (ver RF-05).
+- Dada a resposta, quando validada no backend, então cada campo é confirmado dentro do enum. Com tool use o enum já é garantido pelo schema; a validação no backend é **rede de segurança** (defesa em profundidade), não o caminho de falha esperado. Valor fora do enum, se ocorrer, é tratado como falha (ver RF-05).
 - Dada a classificação válida, quando salva, então o chamado é **atribuído (RF-07)** e só então transita `AGUARDANDO_CLASSIFICACAO → ABERTO`; a classificação fica registrada como **original da IA** (imutável, para comparação futura).
 
 ### RF-05 — Tolerância a falha da IA · `Must`
 **História:** Como sistema, quero não travar o chamado se a IA falhar, para o cliente nunca ser bloqueado.
 **Critérios de aceite:**
-- Cada chamada à OpenAI tem **timeout** (configurável). Estourar o timeout conta como falha transitória.
-- Dada uma falha **transitória** (timeout, HTTP 429, HTTP 5xx ou — improvável, dado o Structured Outputs — valor fora do enum), quando ocorre, então o worker faz **1 tentativa adicional**.
+- Cada chamada à Anthropic tem **timeout** (configurável). Estourar o timeout conta como falha transitória.
+- Dada uma falha **transitória** (timeout, HTTP 429, HTTP 5xx ou — improvável, dado o tool use — valor fora do enum), quando ocorre, então o worker faz **1 tentativa adicional**.
 - Dada uma falha **não transitória** (HTTP 401/403 — credencial/permissão), quando ocorre, então **não** há retry (repetir não ajuda); vai direto para classificação manual e registra o erro no log operacional.
 - Dado que a tentativa adicional também falha (ou a falha era não transitória), quando ocorre, então o chamado **permanece em `AGUARDANDO_CLASSIFICACAO`**, recebe o flag `classificacao_manual_pendente = true`, é **atribuído a um funcionário (RF-07)** e fica marcado para **classificação manual**.
 - Em nenhum caso a falha da IA impede a criação do chamado — ele já foi persistido na abertura (RF-03) — nem elimina/invalida o chamado.
 
 ### RF-06 — Fila com processamento sequencial · `Must`
-**História:** Como sistema, quero enfileirar as classificações, para não estourar o rate limit da OpenAI sob concorrência.
+**História:** Como sistema, quero enfileirar as classificações, para não estourar o rate limit da Anthropic sob concorrência.
 **Critérios de aceite:**
-- Dado que o cliente cria um chamado, quando a requisição é respondida, então o chamado já está **persistido em `AGUARDANDO_CLASSIFICACAO`** e enfileirado — a resposta HTTP **não** espera a OpenAI.
-- Dados até 10 chamados criados simultaneamente, quando processados, então as chamadas à OpenAI ocorrem de forma **serializada pelo worker**, sem erro de rate limit.
+- Dado que o cliente cria um chamado, quando a requisição é respondida, então o chamado já está **persistido em `AGUARDANDO_CLASSIFICACAO`** e enfileirado — a resposta HTTP **não** espera a Anthropic.
+- Dados até 10 chamados criados simultaneamente, quando processados, então as chamadas à Anthropic ocorrem de forma **serializada pelo worker**, sem erro de rate limit.
 - Dado um chamado na fila, quando aguarda ou está sendo processado, então seu status é `AGUARDANDO_CLASSIFICACAO`.
 - O status `AGUARDANDO_CLASSIFICACAO` abrange **dois** sub-estados distinguidos pelo flag `classificacao_manual_pendente`: (a) **na fila / em processamento** pela IA (flag falso) e (b) **aguardando classificação manual** após esgotar os retries (flag verdadeiro, RF-05). O status sozinho não implica que o chamado esteja na fila — só o flag distingue.
 - **Idempotência:** o processamento é idempotente por `chamado_id`. Reentrega ou reexecução de um job **já concluído** não gera nova classificação, nova atribuição nem nova transição de status. Antes de persistir o resultado da IA, o worker **reconfirma** que o chamado ainda está elegível — `AGUARDANDO_CLASSIFICACAO` e não `CANCELADO`; se não estiver (ex.: cancelado durante o processamento, RF-09), o resultado é **descartado** sem classificar nem atribuir.
@@ -176,7 +176,7 @@ A unidade da métrica é o **campo**, não o chamado. Cada chamado classificado 
 
 ## 6. Não-objetivos
 
-- **RAG / base de conhecimento interna** — fora; fica para evolução futura. A v1 usa só a chamada direta à OpenAI com o texto do chamado.
+- **RAG / base de conhecimento interna** — fora; fica para evolução futura. A v1 usa só a chamada direta à Anthropic com o texto do chamado.
 - **Roteamento por área** — fora; todo funcionário é Suporte, a `area` é apenas informativa.
 - **Loop de fine-tuning / re-treino a partir do feedback** — fora; a v1 **registra** o histórico completo (RF-11) que servirá de dataset, mas não retroalimenta o modelo. O consumo desses dados (exportar dataset, treinar, avaliar) fica para evolução futura.
 - **Notificações (e-mail/push) ao cliente ou funcionário** — fora da v1; o acompanhamento é por consulta (RF-10).
@@ -191,24 +191,24 @@ A unidade da métrica é o **campo**, não o chamado. Cada chamado classificado 
 | Categoria | Requisito | Justificativa |
 |---|---|---|
 | Escala | Até 10 chamados simultâneos, single-instance | Alvo declarado; suficiente para demonstração |
-| Performance (síncrono) | Criação e listagem de chamados respondem em **p95 < 500 ms**, excluído o processamento assíncrono da IA | A criação não depende da OpenAI (RF-06); só o rota síncrona tem alvo. Latência da classificação é dominada pela API externa e não tem alvo rígido |
-| Disponibilidade parcial | Criar e listar chamados continuam operando mesmo com a OpenAI indisponível | Consequência do design assíncrono; a IA não é ponto único de falha |
-| Integrações | Fila serializa chamadas à OpenAI; ao falhar de forma transitória, faz 1 retry e degrada para "sem classificação"; erro não transitório (401/403) não faz retry | Protege contra rate limit e indisponibilidade da API externa (RF-05/RF-06) |
-| Segurança e acesso | Autorização **aplicada no backend** por perfil (Cliente/Funcionário/Admin); cliente só vê os próprios chamados; funcionário só opera chamados atribuídos a ele (RF-08); histórico completo (RF-11) restrito ao admin. Senhas armazenadas com **hash** (nunca em claro); secret da OpenAI **fora do frontend e do repositório**; proteção contra **IDOR** (acesso a recurso de outro usuário → 403); conteúdo exibido é **escapado/sanitizado**; texto do chamado tratado como entrada não confiável ao modelo (RF-04) | Trust boundary; demonstra RBAC e baseline de segurança |
+| Performance (síncrono) | Criação e listagem de chamados respondem em **p95 < 500 ms**, excluído o processamento assíncrono da IA | A criação não depende da Anthropic (RF-06); só o rota síncrona tem alvo. Latência da classificação é dominada pela API externa e não tem alvo rígido |
+| Disponibilidade parcial | Criar e listar chamados continuam operando mesmo com a Anthropic indisponível | Consequência do design assíncrono; a IA não é ponto único de falha |
+| Integrações | Fila serializa chamadas à Anthropic; ao falhar de forma transitória, faz 1 retry e degrada para "sem classificação"; erro não transitório (401/403) não faz retry | Protege contra rate limit e indisponibilidade da API externa (RF-05/RF-06) |
+| Segurança e acesso | Autorização **aplicada no backend** por perfil (Cliente/Funcionário/Admin); cliente só vê os próprios chamados; funcionário só opera chamados atribuídos a ele (RF-08); histórico completo (RF-11) restrito ao admin. Senhas armazenadas com **hash** (nunca em claro); secret da Anthropic **fora do frontend e do repositório**; proteção contra **IDOR** (acesso a recurso de outro usuário → 403); conteúdo exibido é **escapado/sanitizado**; texto do chamado tratado como entrada não confiável ao modelo (RF-04) | Trust boundary; demonstra RBAC e baseline de segurança |
 | Auditoria | Histórico de eventos por chamado, imutável e append-only (RF-11): classificação da IA, falhas, reclassificações campo-a-campo e transições de status, cada um com autor e timestamp | Habilita a métrica de concordância, o tracing do ciclo de vida e o dataset para análise/fine-tuning futuro |
 | Observabilidade | Log de falhas de classificação e de erros de rate limit | Necessário para medir a métrica de robustez |
 | Acessibilidade | Básico na v1: HTML semântico; controles principais operáveis por **teclado**, com **foco visível** e **labels acessíveis**; contraste de texto normal **≥ 4.5:1** | Baseline mensurável; conformidade WCAG 2.1 AA completa fica para versão mais madura |
 | Dados e privacidade | Básico na v1: dados de exercício (sem PII real); tratar texto do chamado como potencialmente sensível — sem log do conteúdo em claro fora do necessário. O evento `CLASSIFICACAO_IA` (RF-11) **registra o texto de entrada** — aceitável com dado fictício; em produção, preferir referência ao chamado em vez de duplicar o conteúdo | LGPD formal (base legal, retenção, direito de exclusão) e minimização de duplicação de PII ficam para versão com dado real |
 
-**Categorias avaliadas e não críticas para a v1:** Disponibilidade/SLA formal (projeto de estudo, sem uso 24/7), Performance p95/p99 (latência dominada pela OpenAI, sem alvo rígido), multi-região e custo de infra.
+**Categorias avaliadas e não críticas para a v1:** Disponibilidade/SLA formal (projeto de estudo, sem uso 24/7), Performance p95/p99 (latência dominada pela Anthropic, sem alvo rígido), multi-região e custo de infra.
 
 ## 8. Restrições
 
 - **Time:** você sozinho.
 - **Prazo:** sem data fixa. MoSCoW ordena prioridade, não cronograma.
 - **Contexto:** entrega de trilha de onboarding.
-- **Stack (fixada pela trilha):** NestJS + Prisma + PostgreSQL (backend), Next.js/React (frontend), OpenAI API (classificação), Jest (testes).
-- **Dependência externa:** OpenAI API (rate limit e disponibilidade fora do seu controle → tratado por fila + retry).
+- **Stack (fixada pela trilha):** NestJS + Prisma + PostgreSQL (backend), Next.js/React (frontend), Anthropic API / Claude (classificação), Jest (testes).
+- **Dependência externa:** Anthropic API (rate limit e disponibilidade fora do seu controle → tratado por fila + retry).
 
 ## 9. Tradeoffs e decisões
 
@@ -216,17 +216,17 @@ A unidade da métrica é o **campo**, não o chamado. Cada chamado classificado 
 |---|---|---|---|---|
 | 1 | Automação total × humano no loop | Humano no loop: IA sugere, funcionário revisa e pode reclassificar | Automação total — rejeitada: sem base para confiar cegamente na IA num exercício, e a reclassificação vira a métrica de concordância | stakeholder |
 | 2 | Bloquear chamado até classificar × deixar passar sem classificação | Deixar passar após 1 retry | Bloquear — rejeitada: violaria o guarda-corpo (cliente nunca deve ser impedido de abrir chamado) | stakeholder |
-| 3 | Classificar em paralelo × fila sequencial | Fila sequencial | Paralelo — rejeitada: estoura rate limit da OpenAI sob concorrência | stakeholder |
+| 3 | Classificar em paralelo × fila sequencial | Fila sequencial | Paralelo — rejeitada: estoura rate limit da Anthropic sob concorrência | stakeholder |
 | 4 | Roteamento por área × atribuição só por carga | Só por carga (menor nº de chamados abertos) | Por área — rejeitada: todo funcionário é Suporte, área não discrimina | stakeholder |
 | 5 | Classificar na criação (síncrono) × via fila (assíncrono) | Assíncrono: chamado nasce em `AGUARDANDO_CLASSIFICACAO`, worker classifica e move para `ABERTO` | Síncrono — rejeitada: faria o cliente esperar a latência da IA e reabriria o risco de rate limit sob 10 simultâneos; incoerente com a fila (tradeoff 3) | stakeholder |
-| 6 | Confiar no texto livre da IA × Structured Outputs | Structured Outputs (JSON Schema com enums) + validação no backend | Texto livre + parsing — rejeitada: frágil, gera valores fora do enum e vira o principal caso de falha do RF-05 | stakeholder |
+| 6 | Confiar no texto livre da IA × tool use | tool use (JSON Schema com enums) + validação no backend | Texto livre + parsing — rejeitada: frágil, gera valores fora do enum e vira o principal caso de falha do RF-05 | stakeholder |
 
 ## 10. Riscos e premissas
 
 | Risco / premissa | Impacto | Probabilidade | Mitigação ou plano B |
 |---|---|---|---|
-| IA retorna valor fora do enum | Classificação inválida | Baixa | Structured Outputs (RF-04) + validação estrita + retry + degradar para "sem classificação" (RF-05) |
-| Rate limit da OpenAI sob pico | Chamados não classificam | Média | Fila sequencial (RF-06) |
+| IA retorna valor fora do enum | Classificação inválida | Baixa | tool use (RF-04) + validação estrita + retry + degradar para "sem classificação" (RF-05) |
+| Rate limit da Anthropic sob pico | Chamados não classificam | Média | Fila sequencial (RF-06) |
 | Taxa de concordância baixa demais para demonstrar valor | Métrica principal fraca | `[hipótese]` | Ajuste de prompt; documentar como aprendizado |
 | Seed com poucos chamados revisados torna a taxa estatisticamente frágil | Métrica sensível a ruído (ex.: 2 chamados = 8 campos; 1 erro move 12,5%) | Média | Mínimo de **20 chamados revisados** antes de reportar a taxa (seção 4) |
 | "Revisado" = status além de `ABERTO` não prova leitura atenta dos campos | Concordância aparente infla a taxa se o funcionário avançar sem conferir | Média | RF-08 bloqueia `→ EM_ATENDIMENTO` sem classificação válida; sinal mais forte (`revisado_em`) fica para versão com uso real |
@@ -280,7 +280,7 @@ Demais decisões, fechadas nas entrevistas:
 | Desempate na atribuição | menor id de usuário |
 | Sem funcionário para atribuir | não ocorre (premissa: cliente só existe após funcionário) |
 | Classificação síncrona × assíncrona | assíncrona (fila + worker) |
-| Formato de saída da IA | Structured Outputs + validação |
+| Formato de saída da IA | tool use + validação |
 | Transição após classificação manual | `AGUARDANDO_CLASSIFICACAO → ABERTO` automática |
 | Notificações | fora da v1 |
 | LGPD | básico na v1; formal em versão com dado real |
