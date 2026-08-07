@@ -203,4 +203,5 @@ Mesma do `spec.md`, repetida aqui pra reforço:
 
 | Data | Métrica | De | Para | Motivo | PR |
 |---|---|---|---|---|---|
-| <DATA> | <METRICA> | <ANTES> | <DEPOIS> | <MOTIVO> | #<PR> |
+| 2026-08-07 | coverage_pct | 50 | 50.45 | Testes de auth (domain+usecase+guard) subiram cobertura | feat/auth-rbac |
+| 2026-08-07 | largest_file_lines | 29 | 79 | Baseline 29 era do scaffold vazio (`test/app.e2e-spec.ts`); código real de feature (TASK-02) é maior. Teto legítimo. | feat/auth-rbac |

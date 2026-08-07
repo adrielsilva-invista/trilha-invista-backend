@@ -61,9 +61,11 @@ npx prisma validate
 ```
 
 **Critério de aceite:**
-- [ ] `prisma validate` passa; migration aplicada.
-- [ ] Client gerado, `PrismaService` conecta no boot.
-- [ ] Nada fora do "Diff esperado" foi tocado.
+- [~] `prisma validate` passa ✅; migration aplicada ⏳ (pendente Docker — segunda).
+- [x] Client gerado; `PrismaService` conecta no boot (teste com spy em `$connect`).
+- [x] Nada fora do "Diff esperado" foi tocado.
+
+> **Status:** ✅ código concluído (`feat/prisma-schema` mergeado em dev). Falta só `docker compose up postgres && npx prisma migrate dev --name init` quando o Docker for liberado.
 
 ---
 
@@ -89,14 +91,16 @@ npx prisma validate
 
 **Evaluator valida:**
 ```bash
-npm test -- --testPathPattern=auth
+npm test -- --testPathPatterns=auth
 # unit: LoginUseCase (senha válida/ inválida), PerfilGuard (perfil ok / 403 / sem token 401)
 ```
 
 **Critério de aceite:**
-- [ ] Testes de auth passam (login ok/falho, guard ok/403/401).
-- [ ] Zero secret literal (compliance-grep limpo).
-- [ ] Cobertura da área não caiu.
+- [x] Testes de auth passam (login ok/falho, guard ok/403/401) — 11/11.
+- [x] Zero secret literal (compliance-grep limpo, 0).
+- [x] Cobertura da área não caiu (baseline 50→50.45).
+
+> **Status:** ✅ concluída (`feat/auth-rbac`, commits ae8d7cb + be8fc5d). e2e real contra Postgres pendente de Docker; lógica coberta por unit test.
 
 ---
 
@@ -119,7 +123,7 @@ npm test -- --testPathPattern=auth
 
 **Evaluator valida:**
 ```bash
-npm test -- --testPathPattern=usuario
+npm test -- --testPathPatterns=usuario
 # unit: CriarUsuarioUseCase (cria, hash aplicado, email duplicado → erro)
 # e2e opcional: POST /usuarios como ADMIN 201; como CLIENTE 403
 ```
@@ -152,7 +156,7 @@ npm test -- --testPathPattern=usuario
 
 **Evaluator valida:**
 ```bash
-npm test -- --testPathPattern=chamado
+npm test -- --testPathPatterns=chamado
 # unit: AbrirChamadoUseCase (status inicial correto), DTO (trim, limites 1/5000, vazio→400)
 ```
 
@@ -187,7 +191,7 @@ npm test -- --testPathPattern=chamado
 
 **Evaluator valida:**
 ```bash
-npm test -- --testPathPattern=chamado
+npm test -- --testPathPatterns=chamado
 # unit: tabela de transições válidas/inválidas; final rejeita; cancelamento só ADMIN
 ```
 
@@ -219,7 +223,7 @@ npm test -- --testPathPattern=chamado
 
 **Evaluator valida:**
 ```bash
-npm test -- --testPathPattern=chamado
+npm test -- --testPathPatterns=chamado
 # unit/e2e: cliente A não vê chamado de cliente B; lista só os próprios
 ```
 

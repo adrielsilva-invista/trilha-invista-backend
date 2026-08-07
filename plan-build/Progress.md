@@ -34,22 +34,22 @@ CONVENÇÕES OBRIGATÓRIAS DESTE ARQUIVO (não apagar):
 
 ```
 Sprint-1 — Fundação (sem IA)
-TASK-01 | [░░░░░░░░░░] | Modelo de dados (Prisma + Postgres)        | 🔴 PENDENTE
-TASK-02 | [░░░░░░░░░░] | Autenticação e RBAC (RF-01)                | 🔴 PENDENTE
+TASK-01 | [██████████] | Modelo de dados (Prisma + Postgres)        | ✅ CONCLUÍDA (migrate pendente: Docker segunda)
+TASK-02 | [██████████] | Autenticação e RBAC (RF-01)                | ✅ CONCLUÍDA
 TASK-03 | [░░░░░░░░░░] | Admin cria usuário (RF-02)                 | 🔴 PENDENTE
 TASK-04 | [░░░░░░░░░░] | Cliente abre chamado (RF-03)               | 🔴 PENDENTE
 TASK-05 | [░░░░░░░░░░] | Máquina de estados do chamado (RF-09)      | 🔴 PENDENTE
 TASK-06 | [░░░░░░░░░░] | Cliente acompanha seus chamados (RF-10)    | 🔴 PENDENTE
 ```
 
-Progresso geral: 0/6 TASKs (0%)
+Progresso geral: 2/6 TASKs (33%)
 
 **Resultado dos testes:**
 ```
-—  | 0/0 | ainda não há testes de feature
+jest | 14/14 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaService (2), app (1)
 ```
-**Build:** — (scaffold NestJS compila)
-**bash .harness/quality-gate.sh:** exit 0 (baseline de setup: coverage 50 / dup 0 / lint 0 / maior arquivo 29 / compliance 0)
+**Build:** ✅ `nest build` limpo
+**bash .harness/quality-gate.sh:** exit 0 (baseline: coverage 50.45 / dup 0 / lint 0 / maior arquivo 79 / compliance 0)
 
 ---
 
@@ -71,6 +71,7 @@ Progresso geral: 0/6 TASKs (0%)
 | D-03 | Clean Architecture adaptado = **1 módulo Nest por domínio + camadas por pasta** (`domain/`, `application/`+`ports/`, `infrastructure/`, controller) | Sprint-1 | Standard é .NET (4 .csproj); adaptado a NestJS. Ativa compliance-grep de isolamento folder-scoped (`only_in: src/**/domain/**`). |
 | D-04 | **Bypass de `barramento-worker.md`** | — | Projeto é REST NestJS standalone, não worker NATS. Bypass legítimo (standard exclui adaptadores REST). Registrado em spec §0. |
 | D-05 | **Sprint-1 = fundação sem IA** (RF-01/02/03/09/10); IA/fila/atribuição/histórico → Sprint-2 | Sprint-1 | Isola o risco (Claude) da S2. Consequência aceita: chamado nasce AGUARDANDO_CLASSIFICACAO e fica parado até a S2. |
+| D-06 | **Prisma fixado em ^6** (não 7) | Sprint-1 | Prisma 7 exige driver adapter (@prisma/adapter-pg) + `prisma.config.ts` e remove `url` do datasource — cerimônia desnecessária pro escopo. Confirmado pelo humano (downgrade = decisão de dependência, CLAUDE.md Parte 3). |
 
 ---
 
@@ -134,6 +135,33 @@ Progresso geral: 0/6 TASKs (0%)
 - [ ] quality-gate — n/a (sem mudança de código)
 - [x] grep secrets — limpo (docs sem segredo)
 
+### Sessão 2026-08-07 — TASK-01 (Prisma) + TASK-02 (auth/RBAC)
+
+**Tasks trabalhadas:** TASK-01, TASK-02
+**Status ao encerrar:** ✅ Ambas concluídas (código); `prisma migrate dev` pendente de Docker (segunda)
+
+**O que foi feito:**
+- TASK-01 (`feat/prisma-schema`, mergeado em dev): schema.prisma (User, Chamado, enums), PrismaService global + teste, docker-compose (postgres:16-alpine), .env.example. Prisma fixado ^6 (D-06).
+- TASK-02 (`feat/auth-rbac`, commit ae8d7cb): Clean Arch por camadas — domain/perfil puro (perfilAutorizado), LoginUseCase + ports, infra (bcrypt/jwt/prisma-query), PerfilGuard + @Perfis, POST /auth/login, ValidationPipe global. 14/14 testes.
+- Baseline atualizado (coverage 50→50.45, largest_file 29→79) e registrado no histórico (quality-gate.md §9).
+
+**Decisões:** D-06 (Prisma ^6).
+
+**O que ficou pendente:**
+- `docker compose up postgres` + `prisma migrate dev --name init` — só segunda (Docker bloqueado na máquina, equipe de suporte libera). Schema já validado via `prisma validate`.
+- e2e reais de auth (login contra Postgres) — mesma dependência de Docker. Lógica coberta por unit test com mocks.
+- Flag Jest no Sprint-1.md Evaluators: `--testPathPattern` → `--testPathPatterns` (Jest 30). Doc, pendente.
+
+**Próximo passo exato:**
+> Iniciar TASK-03 (admin cria usuário, RF-02) em branch `feat/crud-usuario` a partir de dev. Reusa PasswordHasher (TASK-02) e PerfilGuard(@Perfis ADMIN).
+
+**Sensores rodados:**
+- [x] build sem warnings
+- [x] testes passando (14/14)
+- [x] bash .harness/quality-gate.sh — exit 0
+- [x] grep compliance — limpo (0)
+- [x] grep secrets — limpo
+
 ---
 
 ## Template para próximas sessões
@@ -170,10 +198,13 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** TASK-01 — modelo de dados Prisma (User, Chamado, enums Perfil/StatusChamado) + PrismaService + service `postgres` no docker-compose. Antes de codar, ativar os patterns de isolamento de camada no `quality-gate.md` §3 (folder-scoped `only_in: src/**/domain/**`, `src/**/application/**`), conforme D-03.
+**Começar em:** TASK-03 — admin cria usuário (RF-02), branch `feat/crud-usuario` a partir de dev. `POST /usuarios` (guard @Perfis ADMIN): valida DTO, hash da senha (reusa PasswordHasher de TASK-02), persiste via PrismaUsuarioRepository; email duplicado → 409; senhaHash nunca na resposta.
 **Contexto crítico:**
+- TASK-01/02 concluídas. Migrate real (`prisma migrate dev`) e e2e contra Postgres pendentes de **Docker (segunda)** — não bloqueia TASK-03..06 (tudo unit-testável com mocks).
 - Sprint-1 é **sem IA** (D-05). Não escrever nada de Claude/fila/atribuição — é Sprint-2.
-- Clean Arch adaptado (D-03): módulo Nest por domínio, camadas por pasta. Domain puro (zero import de @nestjs/@prisma/@anthropic/bullmq).
-- Provider de IA é **Claude** (D-01), relevante só na Sprint-2.
-- B-02: config de repo (Branch Protection + permissão Actions) é ação do humano — o "não mergeia se falhar" depende disso.
+- Clean Arch adaptado (D-03): módulo Nest por domínio, camadas por pasta. Domain puro (zero import de @nestjs/@prisma/@anthropic/bullmq). Padrão já estabelecido em `src/auth/` — espelhar em `src/usuario/`.
+- Reuso: `PasswordHasher`/`BcryptPasswordHasher` e `PerfilGuard`+`@Perfis` já existem (TASK-02). AuthModule exporta o guard.
+- Ativar patterns de isolamento folder-scoped no `quality-gate.md` §3 (`only_in: src/**/domain/**`) — diferido desde D-03, fazer em/antes de TASK-03.
+- Provider de IA é **Claude** (D-01), só na Sprint-2.
+- B-02: config de repo (Branch Protection + permissão Actions) é ação do humano.
 - Cada TASK vira uma branch `feat/**` → gate → auto-PR pra dev → merge manual → auto-PR pra main → merge manual.
