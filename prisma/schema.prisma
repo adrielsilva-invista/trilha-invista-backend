@@ -1,0 +1,58 @@
+// Schema Prisma — TASK-01 (fundação, sem IA).
+// Campos de classificação por IA (categoria/prioridade/area/sentimento/resumo),
+// atribuição e histórico entram na Sprint-2. Ver plan-build/spec.md e Sprint-1.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Perfil {
+  CLIENTE
+  FUNCIONARIO
+  ADMIN
+}
+
+enum StatusChamado {
+  AGUARDANDO_CLASSIFICACAO
+  ABERTO
+  EM_ATENDIMENTO
+  RESOLVIDO
+  CANCELADO
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  senhaHash String
+  perfil    Perfil
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relações (mesma entidade User faz os dois papéis: quem abre e quem atende)
+  chamadosAbertos    Chamado[] @relation("ChamadosDoCliente")
+  chamadosAtribuidos Chamado[] @relation("ChamadosDoFuncionario")
+}
+
+model Chamado {
+  id        Int           @id @default(autoincrement())
+  texto     String
+  status    StatusChamado @default(AGUARDANDO_CLASSIFICACAO)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  clienteId Int
+  cliente   User @relation("ChamadosDoCliente", fields: [clienteId], references: [id])
+
+  // Atribuição a funcionário é RF-07 (Sprint-2); nasce nulo na v1 desta sprint.
+  funcionarioId Int?
+  funcionario   User? @relation("ChamadosDoFuncionario", fields: [funcionarioId], references: [id])
+
+  @@index([clienteId])
+  @@index([funcionarioId])
+  @@index([status])
+}
