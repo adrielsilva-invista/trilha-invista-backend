@@ -1,0 +1,12 @@
+{
+  "coverage_pct": 50,
+  "duplication_pct": 0,
+  "lint_violations": 0,
+  "largest_file_lines": 29,
+  "largest_file_path": "test/app.e2e-spec.ts",
+  "over_limit_count": 0,
+  "max_lines_limit": 800,
+  "compliance_violations": 0,
+  "details": [],
+  "generated_at": "2026-08-07T17:23:44.057Z"
+}
