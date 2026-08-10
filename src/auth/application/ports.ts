@@ -17,7 +17,7 @@ export interface TokenVerifier {
 // Só o que o login precisa do usuário — não é o repositório completo (TASK-03).
 export interface CredencialUsuario {
   id: number;
-  senhaHash: string;
+  passwordHash: string;
   perfil: Perfil;
 }
 

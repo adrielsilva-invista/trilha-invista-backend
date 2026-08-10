@@ -9,7 +9,7 @@ export class PrismaUsuarioLoginQuery implements UsuarioLoginQuery {
   async buscarPorEmail(email: string): Promise<CredencialUsuario | null> {
     const u = await this.prisma.user.findUnique({
       where: { email },
-      select: { id: true, senhaHash: true, perfil: true },
+      select: { id: true, passwordHash: true, perfil: true },
     });
     return u; // enum Perfil do Prisma == união do domínio (mesmos literais)
   }
