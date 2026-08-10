@@ -30,8 +30,8 @@ model User {
   email     String   @unique
   senhaHash String
   perfil    Perfil
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   // Relações (mesma entidade User faz os dois papéis: quem abre e quem atende)
   chamadosAbertos    Chamado[] @relation("ChamadosDoCliente")
@@ -42,8 +42,8 @@ model Chamado {
   id        Int           @id @default(autoincrement())
   texto     String
   status    StatusChamado @default(AGUARDANDO_CLASSIFICACAO)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
 
   clienteId Int
   cliente   User @relation("ChamadosDoCliente", fields: [clienteId], references: [id])
