@@ -74,6 +74,7 @@ jest | 21/21 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 | D-05 | **Sprint-1 = fundação sem IA** (RF-01/02/03/09/10); IA/fila/atribuição/histórico → Sprint-2 | Sprint-1 | Isola o risco (Claude) da S2. Consequência aceita: chamado nasce AGUARDANDO_CLASSIFICACAO e fica parado até a S2. |
 | D-06 | **Prisma fixado em ^6** (não 7) | Sprint-1 | Prisma 7 exige driver adapter (@prisma/adapter-pg) + `prisma.config.ts` e remove `url` do datasource — cerimônia desnecessária pro escopo. Confirmado pelo humano (downgrade = decisão de dependência, CLAUDE.md Parte 3). |
 | D-07 | **Schema full-English + soft delete; email de user soft-deleted NÃO se reusa** | Sprint-1 | Revisão DBA: tabelas/colunas renomeadas p/ inglês snake_case (`@map`/`@@map`), `timestamptz`, `deleted_at` em `users` e `tickets`. `users_email_key` fica UNIQUE **global** (não parcial) — decisão do humano: reuso de email de usuário soft-deleted é bloqueado no banco. Query de login segue `findUnique({email})` sem filtro `deletedAt`. Enum `Perfil` mantido pt-BR (traduzir p/ `Role` = refactor de auth, escopo separado). |
+| D-08 | **Catraca de isolamento de camada ATIVADA** (`clean_arch_nest` no `quality-gate.md §3`) | Sprint-1 | Standard `clean-architecture.md` já estava v2.0 NestJS; faltava ativar os patterns folder-scoped que estavam `ponytail:`/diferidos desde D-03. Gatilho satisfeito: `src/**/domain` e `src/**/application` passaram a existir (auth, usuario). Calibração: domain puríssimo; application **pode** `@nestjs/common` (DI + HttpException), **não** `@prisma/client`/`bullmq`/`@anthropic-ai`/`@nestjs/core`. 0 violações no código mergeado (portar o rule .NET literal reprovaria todo `@Injectable`/`ConflictException`). Subido direto na `dev`. |
 
 ---
 
@@ -188,6 +189,32 @@ jest | 21/21 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 - [x] testes passando (21/21)
 - [x] bash .harness/quality-gate.sh — exit 0
 - [x] grep compliance — skip no gate (só `.env` local, não-trackeado)
+- [x] grep secrets — limpo (nada trackeado)
+
+### Sessão 2026-08-10 — Migração do standard Clean Architecture .NET → NestJS
+
+**Tasks trabalhadas:** manutenção de harness (nenhuma TASK de código)
+**Status ao encerrar:** ✅ Concluída (subido direto na dev)
+
+**O que foi feito:**
+- `standards/clean-architecture.md` confirmado v2.0 NestJS (folders em vez de `.csproj`, tabela "quem importa quem" TS, boundaries com ports Nest, escopo `src/**/domain/**`).
+- `quality-gate.md §3`: bloco `clean_arch_nest` **ativado** no lugar do `ponytail:`/diferido (linhas 93-98). 4 patterns folder-scoped: domain sem `@nestjs/*`; domain+application sem `@prisma/client`/`bullmq`/`@anthropic-ai`/`jsonwebtoken`/`bcryptjs`; application sem `@nestjs/core`; sem `new Date`/`Date.now`/`Math.random`/`crypto.randomUUID` em domain+application.
+- Removido o `ponytail:` (gatilho de upgrade cumprido — pastas de domínio já existem); rastro histórico preservado em D-03/D-08 e no comentário do bloco.
+- Gate rodado: `clean_arch_nest` = 0 violações no código mergeado; único hit é `.env` local (JWT_SECRET, gitignored). Gate completo exit 0.
+
+**Decisões:** D-08 (catraca de isolamento ativada; calibração application pode `@nestjs/common`).
+
+**O que ficou pendente:**
+- Nada desta migração. Próximo é TASK-04.
+
+**Próximo passo exato:**
+> Iniciar TASK-04 (cliente abre chamado, RF-03) em branch `feat/crud-chamado` a partir de dev.
+
+**Sensores rodados:**
+- [x] tsc — n/a (só docs de harness)
+- [x] testes — n/a (sem mudança de código)
+- [x] bash .harness/quality-gate.sh — exit 0
+- [x] grep compliance — `clean_arch_nest` 0; só `.env` local não-trackeado
 - [x] grep secrets — limpo (nada trackeado)
 
 ---
