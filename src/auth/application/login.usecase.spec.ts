@@ -23,7 +23,7 @@ function montar(opts: {
   const compare = jest.fn().mockResolvedValue(opts.senhaConfere);
   const sign = jest.fn().mockReturnValue('jwt-fake');
   const usuarios: UsuarioLoginQuery = { buscarPorEmail };
-  const hasher: PasswordHasher = { compare };
+  const hasher: PasswordHasher = { hash: jest.fn(), compare };
   const tokens: TokenSigner = { sign };
   return { uc: new LoginUseCase(usuarios, hasher, tokens), compare, sign };
 }

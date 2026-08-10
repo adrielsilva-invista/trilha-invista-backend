@@ -25,6 +25,6 @@ import {
     { provide: TOKEN_SIGNER, useExisting: JwtTokenService },
     { provide: TOKEN_VERIFIER, useExisting: JwtTokenService },
   ],
-  exports: [PerfilGuard, TOKEN_VERIFIER],
+  exports: [PerfilGuard, TOKEN_VERIFIER, PASSWORD_HASHER],
 })
 export class AuthModule {}
