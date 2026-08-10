@@ -3,6 +3,7 @@ import { Perfil } from '../domain/perfil';
 // Ports: a application depende destas abstrações; a infra as implementa (D-03).
 
 export interface PasswordHasher {
+  hash(senhaClara: string): Promise<string>;
   compare(senhaClara: string, senhaHash: string): Promise<boolean>;
 }
 
