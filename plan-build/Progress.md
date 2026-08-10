@@ -37,20 +37,21 @@ Sprint-1 — Fundação (sem IA)
 TASK-01 | [██████████] | Modelo de dados (Prisma + Postgres)        | ✅ CONCLUÍDA (migrate init aplicada)
 TASK-02 | [██████████] | Autenticação e RBAC (RF-01)                | ✅ CONCLUÍDA
 TASK-03 | [██████████] | Admin cria usuário (RF-02)                 | ✅ CONCLUÍDA
-TASK-04 | [░░░░░░░░░░] | Cliente abre chamado (RF-03)               | 🔴 PENDENTE
+TASK-04 | [██████████] | Cliente abre chamado (RF-03)               | ✅ CONCLUÍDA
 TASK-05 | [░░░░░░░░░░] | Máquina de estados do chamado (RF-09)      | 🔴 PENDENTE
 TASK-06 | [░░░░░░░░░░] | Cliente acompanha seus chamados (RF-10)    | 🔴 PENDENTE
 ```
 
-Progresso geral: 3/6 TASKs (50%)
+Progresso geral: 4/6 TASKs (67%)
 
 **Resultado dos testes:**
 ```
-jest | 21/21 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaService (2), app (1),
-             | CriarUsuarioUseCase (3), PrismaUsuarioRepository (3), UsuarioController (1)
+jest | 26/26 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaService (2), app (1),
+             | CriarUsuarioUseCase (3), PrismaUsuarioRepository (3), UsuarioController (1),
+             | abrirChamado (2), AbrirChamadoUseCase (1), PrismaChamadoRepository (1), ChamadoController (1)
 ```
 **Build:** ✅ `tsc --noEmit` limpo
-**bash .harness/quality-gate.sh:** exit 0 (coverage 57.89 / dup 0 / lint 0 / maior arquivo 79 / compliance skip)
+**bash .harness/quality-gate.sh:** exit 0 (coverage 60.75 / dup 0 / lint 0 / maior arquivo 79 / compliance skip)
 
 ---
 
@@ -220,6 +221,32 @@ jest | 21/21 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 - [x] grep compliance — `clean_arch_nest` 0; só `.env` local não-trackeado
 - [x] grep secrets — limpo (nada trackeado)
 
+### Sessão 2026-08-10 — TASK-04 (cliente abre chamado, RF-03)
+
+**Tasks trabalhadas:** TASK-04
+**Status ao encerrar:** ✅ Concluída (`feat/crud-chamado`)
+
+**O que foi feito:**
+- Módulo `src/chamado/` espelhando auth/usuario — `domain/chamado.ts` (factory pura `abrirChamado`, nasce `AWAITING_CLASSIFICATION`, D-05), `application/` (`AbrirChamadoUseCase` + `ChamadoRepository` port + token `CHAMADO_REPOSITORY`), `infrastructure/PrismaChamadoRepository`, `chamado.controller.ts` (`POST /chamados` guard `@Perfis('CLIENTE')`), `chamado.module.ts`. `ChamadoModule` ligado no `app.module.ts`.
+- DTO `AbrirChamadoDto`: `@Transform` faz trim antes de `@Length(1,5000)` — " " vira "" e reprova → 400 (trust boundary). `authorId` vem de `req.user.sub` (token), nunca do body (anti-forja).
+- Fora do escopo (S2): enfileirar p/ classificação (RF-06), atribuição a funcionário (RF-07 — `assigneeId` nasce null).
+- 26/26 testes (5 novos); cobertura 57.89→60.75. Lint corrigido: `@Transform` tipado `{ value: unknown }` (evita `no-unsafe-return`) + prettier no domain.
+
+**Decisões:** nenhuma nova (segue D-03/D-05).
+
+**O que ficou pendente:**
+- e2e real de `POST /chamados` (201 CLIENTE / 403 ADMIN-FUNCIONARIO / 401 sem token / 400 vazio) contra Postgres — pende de Docker, como nas TASKs anteriores. Guard + DTO cobertos por unit.
+
+**Próximo passo exato:**
+> Iniciar TASK-05 (máquina de estados do chamado, RF-09) em branch `feat/state-machine-chamado` a partir de dev.
+
+**Sensores rodados:**
+- [x] tsc --noEmit limpo
+- [x] testes passando (26/26)
+- [x] bash .harness/quality-gate.sh — exit 0
+- [x] grep compliance — só `.env` local não-trackeado (gate skip)
+- [x] grep secrets — limpo (nada trackeado)
+
 ---
 
 ## Template para próximas sessões
@@ -256,15 +283,15 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** TASK-04 — cliente abre chamado (RF-03), branch `feat/crud-chamado` a partir de dev. `POST /chamados` (guard @Perfis CLIENTE): valida DTO (body), cria `Ticket` com `authorId` = `req.user.sub`, nasce `AWAITING_CLASSIFICATION` (D-05, sem IA na S1); persiste via repositório de infra.
+**Começar em:** TASK-05 — máquina de estados do chamado (RF-09), branch `feat/state-machine-chamado` a partir de dev. Transições válidas do `TicketStatus` (`AWAITING_CLASSIFICATION → OPEN → IN_PROGRESS → RESOLVED`; `CANCELLED` a partir dos não-finais), guardadas por perfil. Domain puro define a tabela de transições permitidas; application recusa transição inválida → 409/422; controller expõe o endpoint de mudança de estado.
 **Contexto crítico:**
-- TASK-01/02/03 concluídas. Migrate init aplicada. e2e contra Postgres pendentes de **Docker** — não bloqueia TASK-04..06 (tudo unit-testável com mocks).
-- Padrão de módulo estabelecido em `src/auth/` e `src/usuario/`: espelhar em `src/chamado/`. `PerfilGuard` põe `req.user = { sub, perfil }` — o controller lê o autor daí.
-- **Backlog (fora da Sprint-1):** documentar API via `@nestjs/swagger` (`SwaggerModule` em `/api`). Não pedido em nenhuma TASK; humano quer futuramente, não agora. Endpoints a documentar quando entrar: `POST /auth/login`, `POST /usuarios`, `POST /chamados`.
-- Sprint-1 é **sem IA** (D-05). Não escrever nada de Claude/fila/atribuição — é Sprint-2.
-- Clean Arch adaptado (D-03): módulo Nest por domínio, camadas por pasta. Domain puro (zero import de @nestjs/@prisma/@anthropic/bullmq). Padrão já estabelecido em `src/auth/` — espelhar em `src/usuario/`.
+- TASK-01/02/03/04 concluídas. Migrate init aplicada. e2e contra Postgres pendentes de **Docker** — não bloqueia TASK-05/06 (tudo unit-testável com mocks).
+- Padrão de módulo estabelecido em `src/auth/`, `src/usuario/`, `src/chamado/`: espelhar. `PerfilGuard` põe `req.user = { sub, perfil }` — o controller lê o autor daí.
+- TASK-05 estende `src/chamado/`: nova função pura de transição no `domain/chamado.ts` (ou `domain/transicoes.ts`), novo use case + método no repo (`atualizarStatus`), novo endpoint. NÃO tocar em outros módulos.
+- **Backlog (fora da Sprint-1):** documentar API via `@nestjs/swagger` (`SwaggerModule` em `/api`). Não pedido em nenhuma TASK; humano quer futuramente, não agora. Endpoints a documentar quando entrar: `POST /auth/login`, `POST /usuarios`, `POST /chamados`, + o de transição da TASK-05.
+- Sprint-1 é **sem IA** (D-05). Não escrever nada de Claude/fila/atribuição — é Sprint-2. Nesta sprint nada mais move o chamado automaticamente; a transição é manual (funcionário/admin).
+- Clean Arch adaptado (D-03): módulo Nest por domínio, camadas por pasta. Domain puro (zero import de @nestjs/@prisma/@anthropic/bullmq).
 - Reuso: `PasswordHasher`/`BcryptPasswordHasher` e `PerfilGuard`+`@Perfis` já existem (TASK-02). AuthModule exporta o guard.
-- Ativar patterns de isolamento folder-scoped no `quality-gate.md` §3 (`only_in: src/**/domain/**`) — diferido desde D-03, fazer em/antes de TASK-03.
 - Provider de IA é **Claude** (D-01), só na Sprint-2.
 - B-02: config de repo (Branch Protection + permissão Actions) é ação do humano.
 - Cada TASK vira uma branch `feat/**` → gate → auto-PR pra dev → merge manual → auto-PR pra main → merge manual.

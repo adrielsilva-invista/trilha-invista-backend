@@ -161,9 +161,9 @@ npm test -- --testPathPatterns=chamado
 ```
 
 **Critério de aceite:**
-- [ ] Testes passam (status inicial, validação de tamanho, vazio→400).
-- [ ] Cobertura não caiu.
-- [ ] Nada fora do "Diff esperado" tocado.
+- [x] Testes passam (status inicial, validação de tamanho, vazio→400). — 26/26; nasce `AWAITING_CLASSIFICATION`, `@Length(1,5000)` pós-`@Transform` trim.
+- [x] Cobertura não caiu. — 57.89→60.75.
+- [x] Nada fora do "Diff esperado" tocado. — só `src/chamado/**` + `src/app.module.ts` (registro do módulo).
 
 ---
 
