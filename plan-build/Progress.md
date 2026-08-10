@@ -191,7 +191,7 @@ jest | 21/21 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 - [x] grep compliance — skip no gate (só `.env` local, não-trackeado)
 - [x] grep secrets — limpo (nada trackeado)
 
-### Sessão 2026-08-10 — Migração do standard Clean Architecture .NET → NestJS
+### Sessão 2026-08-10 — Migração dos standards .NET → NestJS (clean-architecture + clean-code)
 
 **Tasks trabalhadas:** manutenção de harness (nenhuma TASK de código)
 **Status ao encerrar:** ✅ Concluída (subido direto na dev)
@@ -200,12 +200,15 @@ jest | 21/21 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 - `standards/clean-architecture.md` confirmado v2.0 NestJS (folders em vez de `.csproj`, tabela "quem importa quem" TS, boundaries com ports Nest, escopo `src/**/domain/**`).
 - `quality-gate.md §3`: bloco `clean_arch_nest` **ativado** no lugar do `ponytail:`/diferido (linhas 93-98). 4 patterns folder-scoped: domain sem `@nestjs/*`; domain+application sem `@prisma/client`/`bullmq`/`@anthropic-ai`/`jsonwebtoken`/`bcryptjs`; application sem `@nestjs/core`; sem `new Date`/`Date.now`/`Math.random`/`crypto.randomUUID` em domain+application.
 - Removido o `ponytail:` (gatilho de upgrade cumprido — pastas de domínio já existem); rastro histórico preservado em D-03/D-08 e no comentário do bloco.
+- `standards/clean-code.md` migrado v1.0 .NET → v2.0 NestJS/TS: bloco YAML `clean_code` (`Console.WriteLine`→`console.*`, `throw new Exception(`→`throw new Error(`, removido `m_` húngaro, `var …=`→`(const|let|var) …=`); F.I.R.S.T. (`DateTime.Now`/`Random`→`new Date()`/`Math.random()`); XML doc→JSDoc/TSDoc; refs `clean_arch_dotnet`→`clean_arch_nest`. Só doc de standard — regex ativos no gate já eram TS.
+- `HARNESS-SNAPSHOT.md` criado na raiz (doc de leitura: migração .NET→Node, tree do harness, status das sprints).
 - Gate rodado: `clean_arch_nest` = 0 violações no código mergeado; único hit é `.env` local (JWT_SECRET, gitignored). Gate completo exit 0.
 
 **Decisões:** D-08 (catraca de isolamento ativada; calibração application pode `@nestjs/common`).
 
 **O que ficou pendente:**
-- Nada desta migração. Próximo é TASK-04.
+- `barramento-worker.md` continua .NET por design (bypass D-04, não se aplica a REST standalone).
+- Nada mais desta migração. Próximo é TASK-04.
 
 **Próximo passo exato:**
 > Iniciar TASK-04 (cliente abre chamado, RF-03) em branch `feat/crud-chamado` a partir de dev.

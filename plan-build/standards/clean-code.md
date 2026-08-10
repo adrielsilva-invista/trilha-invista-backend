@@ -2,7 +2,7 @@
 
 > **Obrigatório por default em todo projeto gerado pelo harness.**
 > Bypass apenas para projetos sem código humano-escrito (ver "Bypass legítimo" no fim).
-> Versão 1.0 — 2026-05-22
+> Versão 2.0 — 2026-08-10 (migrado de .NET → NestJS/TypeScript; ver D-03/D-08 no Progress.md)
 
 ## Escopo padrão
 
@@ -74,7 +74,7 @@ Toda regra abaixo é consequência verificável dessa.
 - Justifica decisão não-óbvia (`// alinhado em 64 bytes pra cache hit do processador X`).
 - Explica regulamento/contrato externo (`// IRS exige arredondamento half-up — ver doc fiscal`).
 - TODO **rastreado** (com link de issue): `// TODO(JIRA-123): suporte a UTF-16`.
-- Header de API pública (XML doc).
+- Header de API pública (JSDoc/TSDoc).
 
 ❌ Comentário proibido:
 - Redundante: `// soma a e b` antes de `int Sum(int a, int b)`.
@@ -86,9 +86,9 @@ Toda regra abaixo é consequência verificável dessa.
 ### 4. Tratamento de erro explícito
 
 - **Use exception**, não código de retorno. Caller decide se trata ou propaga.
-- **Exception específica**, nunca `throw new Exception("...")`.
+- **Exception específica**, nunca `throw new Error("...")`.
 - **Catch em escopo próprio** — try/catch é a estrutura da função.
-- **Nunca catch vazio** (já coberto pelo `clean_arch_dotnet`).
+- **Nunca catch vazio** (já coberto pelo `clean_arch_nest`).
 - **Don't return null** — use `Optional` / `Maybe` / coleção vazia / Special Case Object.
 - **Don't pass null** como argumento — quebra o contrato do método.
 
@@ -108,8 +108,8 @@ Toda regra abaixo é consequência verificável dessa.
 |---|---|---|
 | **F**ast | Rápido | Test runner roda em segundos no projeto (alvo) |
 | **I**ndependent | Independente | Ordem dos testes não importa; cada um se monta e desmonta |
-| **R**epeatable | Repetível | Roda igual no laptop, CI e datacenter; sem `DateTime.Now`, sem `Random` direto |
-| **S**elf-validating | Auto-validável | `assert`, não `Console.WriteLine` pro humano olhar |
+| **R**epeatable | Repetível | Roda igual no laptop, CI e datacenter; sem `new Date()`, sem `Math.random()` direto (injete port — ver `clean-architecture.md`) |
+| **S**elf-validating | Auto-validável | `expect`/`assert`, não `console.log` pro humano olhar |
 | **T**imely | Em tempo | Escrito junto com (ou antes — TDD) o código de produção |
 
 - **Um conceito por teste.** Não 3 asserts de cenários diferentes no mesmo método.
@@ -158,24 +158,22 @@ clean_code:
   - pattern: "\\b(TODO|FIXME|HACK|XXX)\\b"
     message: "TODO/FIXME/HACK em produção. Resolva ou abra issue rastreável (ex.: TODO(JIRA-123))."
 
-  - pattern: "Console\\.WriteLine"
-    message: "Use ILogger estruturado, não Console.WriteLine."
+  - pattern: "console\\.(log|debug|info|warn|error)\\("
+    message: "Use Logger do Nest (@nestjs/common), não console.*."
 
-  - pattern: "throw\\s+new\\s+Exception\\("
-    message: "Exception genérica. Use tipo específico ou exception de domínio."
-
-  - pattern: "\\bm_[a-z]"
-    message: "Prefixo húngaro proibido (m_). Use convenção .NET padrão (camelCase ou _prefix)."
+  - pattern: "throw\\s+new\\s+Error\\("
+    message: "Error genérico. Use HttpException do Nest ou exception de domínio específica."
 
   - pattern: "class\\s+\\w+(Manager|Helper|Util|Utility|Common|Misc)\\b"
     message: "Nome genérico (Manager/Helper/Util). Renomeie pelo verbo que a classe faz."
 
-  - pattern: "var\\s+(data|info|temp|obj|thing|stuff|item|value)\\s*="
+  - pattern: "(const|let|var)\\s+(data|info|temp|obj|thing|stuff|item|value)\\s*="
     message: "Nome desinformativo. Use nome que revele intenção."
 ```
 
-> `catch` vazio e `NotImplementedException` já são cobertos pelo bloco `clean_arch_dotnet`
-> e não são duplicados aqui.
+> `catch` vazio já é coberto pelos patterns globais do `quality-gate.md` §3 e não é
+> duplicado aqui. Estes patterns são a intenção; a fonte de verdade dos regex ativos
+> é o bloco `forbidden_patterns` no `quality-gate.md` §3.
 
 ## Bypass legítimo
 
@@ -214,5 +212,5 @@ Padrões de código: Bypass de Clean Code. Motivo: <uma linha — ex.: "workflow
   difundida de engenharia de software (palestras públicas, blogs do autor,
   cursos abertos).
 - Este standard **não reproduz** material com direito autoral; destila os
-  princípios em regras verificáveis aplicáveis ao stack .NET 10 (e genéricas
-  multi-stack onde apropriado) deste harness.
+  princípios em regras verificáveis aplicáveis ao stack **NestJS 11 / TypeScript**
+  deste harness (migrado de .NET 10 na v2.0 — ver D-03/D-08 no Progress.md).
