@@ -90,12 +90,32 @@ forbidden_patterns:
   - pattern: "(?i)(api[_-]?key|secret|password|token)\\s*[:=]\\s*[\"'][^\"']{8,}[\"']"
     message: "Secret literal no código. Use variável de ambiente / .env (fora do repo)."
 
-  # ── Clean Architecture (layer isolation) — DIFERIDO ─────────────────
-  # ponytail: patterns de isolamento de camada (Domain não importa infra/framework)
-  # são folder-scoped via only_in. A estrutura de pastas NestJS ainda não existe —
-  # será definida no spec.md/Sprint-1. Ativar aqui quando as pastas de domínio
-  # (ex.: src/<dominio>/domain, src/<dominio>/application) forem criadas, com globs
-  # como only_in: "src/**/domain/**". Ver standards/clean-architecture.md.
+  # ── Clean Architecture (layer isolation) — ATIVO ───────────────────
+  # Fonte de verdade: standards/clean-architecture.md (bloco clean_arch_nest).
+  # Folder-scoped via only_in. Ativado quando src/**/domain e src/**/application
+  # passaram a existir (auth, usuario — TASK-02/03). Adaptação NestJS (D-03):
+  # domain é puríssimo; application PODE @nestjs/common (DI + HttpException),
+  # mas NÃO @prisma/client, bullmq, @anthropic-ai, @nestjs/core.
+
+  # domain/ é puríssimo: nada de framework Nest.
+  - pattern: "from\\s+['\"]@nestjs/"
+    only_in: "src/**/domain/**"
+    message: "domain/ não importa @nestjs/*. Domínio é puro (D-03). Mova DI/HTTP para application/ ou borda."
+
+  # domain/ e application/ não conhecem ORM/fila/IA/cripto concreta.
+  - pattern: "from\\s+['\"](@prisma/client|bullmq|@anthropic-ai|jsonwebtoken|bcryptjs)"
+    only_in: "src/**/domain/**, src/**/application/**"
+    message: "domain/ e application/ não conhecem ORM/fila/IA/cripto. Use um port + implementação na infrastructure/."
+
+  # application/ não importa @nestjs/core (Reflector/ExecutionContext são de guard/borda).
+  - pattern: "from\\s+['\"]@nestjs/core"
+    only_in: "src/**/application/**"
+    message: "application/ não importa @nestjs/core (Reflector/ExecutionContext são de guard/borda)."
+
+  # Sem relógio/aleatório direto no domínio ou use case (quebra testes determinísticos).
+  - pattern: "new\\s+Date\\(|Date\\.now\\(|Math\\.random\\(|crypto\\.randomUUID\\("
+    only_in: "src/**/domain/**, src/**/application/**"
+    message: "Ponto de I/O escondido. Injete um port (Clock/IdGenerator) e implemente na infrastructure/."
 
   # CNPJ Alfanumérico — OPT-IN (ver standards/cnpj-alfanumerico.md).
   # Descomente SOMENTE se o projeto valida/recebe/persiste CNPJ. CNPJ passa a

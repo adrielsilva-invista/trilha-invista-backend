@@ -230,6 +230,7 @@ Copiar e preencher ao encerrar a sessão:
 **Contexto crítico:**
 - TASK-01/02/03 concluídas. Migrate init aplicada. e2e contra Postgres pendentes de **Docker** — não bloqueia TASK-04..06 (tudo unit-testável com mocks).
 - Padrão de módulo estabelecido em `src/auth/` e `src/usuario/`: espelhar em `src/chamado/`. `PerfilGuard` põe `req.user = { sub, perfil }` — o controller lê o autor daí.
+- **Backlog (fora da Sprint-1):** documentar API via `@nestjs/swagger` (`SwaggerModule` em `/api`). Não pedido em nenhuma TASK; humano quer futuramente, não agora. Endpoints a documentar quando entrar: `POST /auth/login`, `POST /usuarios`, `POST /chamados`.
 - Sprint-1 é **sem IA** (D-05). Não escrever nada de Claude/fila/atribuição — é Sprint-2.
 - Clean Arch adaptado (D-03): módulo Nest por domínio, camadas por pasta. Domain puro (zero import de @nestjs/@prisma/@anthropic/bullmq). Padrão já estabelecido em `src/auth/` — espelhar em `src/usuario/`.
 - Reuso: `PasswordHasher`/`BcryptPasswordHasher` e `PerfilGuard`+`@Perfis` já existem (TASK-02). AuthModule exporta o guard.
