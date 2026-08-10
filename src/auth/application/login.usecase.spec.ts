@@ -9,7 +9,7 @@ import {
 
 const usuarioValido: CredencialUsuario = {
   id: 7,
-  senhaHash: 'hash-guardado',
+  passwordHash: 'hash-guardado',
   perfil: 'ADMIN',
 };
 

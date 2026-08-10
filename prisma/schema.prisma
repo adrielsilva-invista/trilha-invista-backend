@@ -1,4 +1,5 @@
 // Schema Prisma — TASK-01 (fundação, sem IA).
+// Nomes físicos em inglês snake_case (@map/@@map); soft delete via deletedAt.
 // Campos de classificação por IA (categoria/prioridade/area/sentimento/resumo),
 // atribuição e histórico entram na Sprint-2. Ver plan-build/spec.md e Sprint-1.md.
 
@@ -11,48 +12,55 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ponytail: Perfil e seus literais são contrato de RBAC (JWT/guard/testes), não naming de schema.
+// Mantidos em pt-BR de propósito; traduzir p/ Role é refactor de auth (escopo separado).
 enum Perfil {
   CLIENTE
   FUNCIONARIO
   ADMIN
 }
 
-enum StatusChamado {
-  AGUARDANDO_CLASSIFICACAO
-  ABERTO
-  EM_ATENDIMENTO
-  RESOLVIDO
-  CANCELADO
+enum TicketStatus {
+  AWAITING_CLASSIFICATION
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  senhaHash String
-  perfil    Perfil
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  perfil       Perfil
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(3)
 
-  // Relações (mesma entidade User faz os dois papéis: quem abre e quem atende)
-  chamadosAbertos    Chamado[] @relation("ChamadosDoCliente")
-  chamadosAtribuidos Chamado[] @relation("ChamadosDoFuncionario")
+  // Mesma entidade User faz os dois papéis: quem abre e quem atende.
+  ticketsCreated  Ticket[] @relation("TicketAuthor")
+  ticketsAssigned Ticket[] @relation("TicketAssignee")
+
+  @@map("users")
 }
 
-model Chamado {
-  id        Int           @id @default(autoincrement())
-  texto     String
-  status    StatusChamado @default(AGUARDANDO_CLASSIFICACAO)
-  createdAt DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
+model Ticket {
+  id        Int          @id @default(autoincrement())
+  body      String
+  status    TicketStatus @default(AWAITING_CLASSIFICATION)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime?    @map("deleted_at") @db.Timestamptz(3)
 
-  clienteId Int
-  cliente   User @relation("ChamadosDoCliente", fields: [clienteId], references: [id])
+  authorId Int  @map("author_id")
+  author   User @relation("TicketAuthor", fields: [authorId], references: [id], onDelete: Restrict)
 
   // Atribuição a funcionário é RF-07 (Sprint-2); nasce nulo na v1 desta sprint.
-  funcionarioId Int?
-  funcionario   User? @relation("ChamadosDoFuncionario", fields: [funcionarioId], references: [id])
+  assigneeId Int?  @map("assignee_id")
+  assignee   User? @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
-  @@index([clienteId])
-  @@index([funcionarioId])
+  @@index([authorId])
+  @@index([assigneeId])
   @@index([status])
+  @@map("tickets")
 }

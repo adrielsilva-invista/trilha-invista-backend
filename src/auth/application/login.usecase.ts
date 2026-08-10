@@ -16,7 +16,7 @@ export class LoginUseCase {
   ): Promise<{ accessToken: string }> {
     const usuario = await this.usuarios.buscarPorEmail(email);
     // Mesma resposta para "email não existe" e "senha errada": não vaza quais emails existem.
-    if (!usuario || !(await this.hasher.compare(senha, usuario.senhaHash))) {
+    if (!usuario || !(await this.hasher.compare(senha, usuario.passwordHash))) {
       throw new UnauthorizedException('Credenciais inválidas');
     }
     return {
