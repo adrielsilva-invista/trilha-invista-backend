@@ -24,6 +24,7 @@ Regras genéricas, válidas para qualquer mudança em qualquer serviço.
 - Nunca usar nomes genéricos (`api`, `service`, `app`) para serviços ou containers — sempre nome específico do projeto.
 - Sempre trabalhar dentro da pasta do serviço atual. Não vaze para irmãos.
 - Se a mudança afetar outro serviço, **PARE e SINALIZE**. Não tome a decisão sozinho.
+- **Confiar no estado que o humano afirma.** Se ele disse "a dev está atualizada", "já dei push", "o merge entrou" — é verdade. Não rodar comando pra verificar (`git log`, `git status`, `git fetch`) o que ele acabou de afirmar. Push/pull são manuais dele (chave SSH); o gate roda no CI. Verificar o que já foi afirmado = desperdício e desconfiança.
 
 ---
 

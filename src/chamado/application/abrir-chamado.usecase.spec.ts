@@ -10,7 +10,11 @@ describe('AbrirChamadoUseCase', () => {
       authorId: 99,
       createdAt: new Date(0),
     });
-    const repo: ChamadoRepository = { criar };
+    const repo: ChamadoRepository = {
+      criar,
+      buscarPorId: jest.fn(),
+      atualizarStatus: jest.fn(),
+    };
     const usecase = new AbrirChamadoUseCase(repo);
 
     const out = await usecase.executar('texto', 99);

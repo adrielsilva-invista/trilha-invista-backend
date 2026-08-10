@@ -196,9 +196,9 @@ npm test -- --testPathPatterns=chamado
 ```
 
 **Critério de aceite:**
-- [ ] Testes cobrem transições válidas, inválidas e estados finais.
-- [ ] Regra de transição é função pura (roda sem subir Postgres).
-- [ ] Cobertura não caiu.
+- [x] Testes cobrem transições válidas, inválidas e estados finais. — 8 unit no domain + 4 no use case (404/403/409).
+- [x] Regra de transição é função pura (roda sem subir Postgres). — `domain/transicoes.ts`, zero import de infra.
+- [x] Cobertura não caiu. — 60.75→65.58.
 
 ---
 
