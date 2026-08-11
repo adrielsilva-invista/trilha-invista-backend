@@ -32,6 +32,7 @@ function pick(obj, key) {
 }
 
 const checks = [
+  { key: 'test_failures',        direction: 'eq',    absolute: true,  label: 'Testes vermelhos' },
   { key: 'coverage_pct',         direction: 'gte',   absolute: false, label: 'Cobertura (%)' },
   { key: 'duplication_pct',      direction: 'lte',   absolute: false, label: 'Duplicação (%)' },
   { key: 'lint_violations',      direction: 'lte',   absolute: false, label: 'Lint violations' },

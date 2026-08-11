@@ -51,8 +51,10 @@ QGATE = sys.argv[2]
 EXCLUDE_DIRS = {
     "node_modules", ".git", ".harness", "plan-build", "dist", "build", "out",
     "bin", "obj", "coverage", ".next", ".venv", "venv", "__pycache__", "vendor",
+    "scripts",  # tooling CLI (.mjs geradores etc.) — não é código de app Nest
 }
-EXCLUDE_FILE_GLOBS = ["*.example", "*.lock", "*.min.js", "*.map", "bootstrap_harness.py"]
+# .env* é secret-store por design (é ONDE o secret deve morar) — escaneá-lo é falso-positivo.
+EXCLUDE_FILE_GLOBS = ["*.example", ".env", ".env.*", "*.lock", "*.min.js", "*.map", "bootstrap_harness.py"]
 TEST_PATH_MARKERS = ["/test/", "/tests/", "/mocks/", "/__mocks__/"]
 TEST_NAME_MARKERS = ["_test.", ".test.", "_spec.", ".spec."]
 
