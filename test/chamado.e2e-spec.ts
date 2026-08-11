@@ -155,4 +155,44 @@ describe('Chamados (e2e)', () => {
         .expect(403);
     });
   });
+
+  describe('GET /chamados (RF-10, anti-IDOR)', () => {
+    it('CLIENTE vê só os próprios chamados, nunca os de outro cliente', async () => {
+      const clienteB = await semearUsuario(
+        prisma,
+        'cliB@inv.com',
+        'senhaForte1',
+        'CLIENTE',
+      );
+      await prisma.ticket.create({
+        data: { body: 'meu 1', authorId: clienteId },
+      });
+      await prisma.ticket.create({
+        data: { body: 'meu 2', authorId: clienteId },
+      });
+      await prisma.ticket.create({
+        data: { body: 'do B', authorId: clienteB },
+      });
+
+      const res = await request(app.getHttpServer())
+        .get('/chamados')
+        .set('Authorization', tokenCliente)
+        .expect(200);
+
+      const lista = res.body as { id: number; body: string }[];
+      expect(lista).toHaveLength(2);
+      expect(lista.map((c) => c.body).sort()).toEqual(['meu 1', 'meu 2']);
+    });
+
+    it('sem token → 401', () => {
+      return request(app.getHttpServer()).get('/chamados').expect(401);
+    });
+
+    it('ADMIN → 403 (endpoint é só do CLIENTE nesta sprint)', () => {
+      return request(app.getHttpServer())
+        .get('/chamados')
+        .set('Authorization', tokenAdmin)
+        .expect(403);
+    });
+  });
 });
