@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   Param,
   ParseIntPipe,
@@ -15,7 +16,8 @@ import { PerfilGuard } from '../auth/guards/perfil.guard';
 import { Perfis } from '../auth/guards/perfis.decorator';
 import { AbrirChamadoUseCase } from './application/abrir-chamado.usecase';
 import { MudarStatusUseCase } from './application/mudar-status.usecase';
-import { ChamadoCriado } from './application/ports';
+import { ListarMeusChamadosUseCase } from './application/listar-meus-chamados.usecase';
+import { ChamadoCriado, ChamadoResumo } from './application/ports';
 import type { TicketStatus } from './domain/chamado';
 
 class AbrirChamadoDto {
@@ -46,7 +48,17 @@ export class ChamadoController {
   constructor(
     private readonly abrir: AbrirChamadoUseCase,
     private readonly mudarStatus: MudarStatusUseCase,
+    private readonly listarMeus: ListarMeusChamadosUseCase,
   ) {}
+
+  // Lista só os chamados do próprio cliente. O filtro é req.user.sub — nunca
+  // um id de query — então CLIENTE não forja acesso a chamado alheio (IDOR).
+  @Get()
+  @UseGuards(PerfilGuard)
+  @Perfis('CLIENTE')
+  listarMeusChamados(@Req() req: ReqComUsuario): Promise<ChamadoResumo[]> {
+    return this.listarMeus.executar(req.user.sub);
+  }
 
   @Post()
   @HttpCode(201)

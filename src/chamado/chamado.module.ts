@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ChamadoController } from './chamado.controller';
 import { AbrirChamadoUseCase } from './application/abrir-chamado.usecase';
 import { MudarStatusUseCase } from './application/mudar-status.usecase';
+import { ListarMeusChamadosUseCase } from './application/listar-meus-chamados.usecase';
 import { PrismaChamadoRepository } from './infrastructure/prisma-chamado.repository';
 import { CHAMADO_REPOSITORY } from './application/ports';
 
@@ -13,6 +14,7 @@ import { CHAMADO_REPOSITORY } from './application/ports';
   providers: [
     AbrirChamadoUseCase,
     MudarStatusUseCase,
+    ListarMeusChamadosUseCase,
     { provide: CHAMADO_REPOSITORY, useClass: PrismaChamadoRepository },
   ],
 })

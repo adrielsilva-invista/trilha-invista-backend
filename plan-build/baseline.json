@@ -1,8 +1,8 @@
 {
-  "coverage_pct": 65.58,
+  "coverage_pct": 66.37,
   "duplication_pct": 0,
   "lint_violations": 0,
-  "largest_file_lines": 158,
+  "largest_file_lines": 198,
   "largest_file_path": "test/chamado.e2e-spec.ts",
   "over_limit_count": 0,
   "max_lines_limit": 800,

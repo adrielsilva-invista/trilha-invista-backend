@@ -17,10 +17,21 @@ export interface ChamadoEstado {
   assigneeId: number | null;
 }
 
+// Item da lista do cliente (RF-10). Sem `resumo` (read-only da IA, Sprint-2).
+export interface ChamadoResumo {
+  id: number;
+  body: string;
+  status: TicketStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface ChamadoRepository {
   criar(chamado: NovoChamado): Promise<ChamadoCriado>;
   buscarPorId(id: number): Promise<ChamadoEstado | null>;
   atualizarStatus(id: number, status: TicketStatus): Promise<ChamadoCriado>;
+  // Anti-IDOR: filtra sempre por autorId (vindo do token), nunca por query.
+  listarPorAutor(autorId: number): Promise<ChamadoResumo[]>;
 }
 
 export const CHAMADO_REPOSITORY = 'CHAMADO_REPOSITORY';
