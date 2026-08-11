@@ -26,7 +26,7 @@ CONVENÇÕES OBRIGATÓRIAS DESTE ARQUIVO (não apagar):
 |--------|--------|--------|-----------|
 | Sprint-0: Setup do harness + CI GitFlow | ✅ CONCLUÍDA | 2026-08-07 | 2026-08-07 |
 | Sprint-1: Fundação (auth, usuários, ciclo do chamado — sem IA) | ✅ CONCLUÍDA | 2026-08-07 | 2026-08-11 |
-| Sprint-2: IA + fila + atribuição + histórico | 🔴 PENDENTE | — | — |
+| Sprint-2: IA + fila + atribuição + histórico | 🟡 EM ANDAMENTO | 2026-08-11 | — |
 
 ---
 
@@ -342,10 +342,12 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** **Sprint-2** (IA + fila + atribuição + histórico). Sprint-1 concluída (6/6). Aguardar merge do PR #33 (`feat/listar-meus-chamados`→dev; dev→main abre sozinho). Antes de codar, escrever/revisar `Sprint-2.md` fatiando RF-04..08 em TASKs Builder↔Evaluator.
+**Começar em:** **TASK-07** (schema da classificação + histórico) — primeira da Sprint-2, já planejada em `Sprint-2.md`. Branch `feat/schema-classificacao-historico` a partir da dev. Adiciona enums (Categoria/Prioridade/Area/Sentimento/TicketEventType), campos original-IA-imutável + final + flag `classificacao_manual_pendente` no `Ticket`, e model `TicketEvent` append-only. **Antes de codar a modelagem original-vs-final: rodar `squad-vote`** (colunas no Ticket vs tabela `Classificacao`).
 **Contexto crítico:**
+- **Sprint-2 planejada**: `Sprint-2.md` escrito com 7 TASKs (07..13) Builder↔Evaluator. Recorte: 07 schema, 08 histórico (RF-11), 09 fila+worker fake (RF-06), 10 gateway Claude real (RF-04), 11 caminho feliz classifica→atribui→OPEN (RF-04+07), 12 tolerância a falha (RF-05), 13 reclassificação funcionário (RF-08). Ordem por dependência.
+- **Chamada real ao Claude = só na TASK-10.** TASK-09 roda a fila com gateway **fake** (zero API). Teste da TASK-10 = **mock + e2e real opt-in** (bate na Anthropic só se `ANTHROPIC_API_KEY` no ambiente). Humano põe a key no `.env` local **quando a TASK-10 começar** — avisar. Key nunca no repo/chat/CI.
 - **Sprint-1 100% fechada**: auth/RBAC, CRUD usuário, abrir chamado, máquina de estados, listar meus chamados. e2e reais contra Postgres verdes (20/20). Gate exit 0 (coverage 66.37).
-- Sprint-2 traz o risco isolado (Claude, D-01) + infra nova: **BullMQ+Redis** (D-02) adiciona Redis ao docker-compose/CI + `REDIS_URL`. Atribuição a funcionário (RF-07) usa `assigneeId` (nasce null hoje). `AWAITING_CLASSIFICATION → OPEN` só existe a partir da S2 (hoje só sai por CANCELLED).
+- Sprint-2 traz o risco isolado (Claude, D-01) + infra nova: **BullMQ+Redis** (D-02) adiciona Redis ao docker-compose/CI + `REDIS_URL` (TASK-09, toca B-02). Atribuição a funcionário (RF-07) usa `assigneeId` (nasce null hoje). `AWAITING_CLASSIFICATION → OPEN` só existe a partir da S2 (hoje só sai por CANCELLED).
 - Padrão de módulo em `src/auth/`, `src/usuario/`, `src/chamado/`: espelhar. Domain puro (D-03/D-08: zero import de @nestjs/@prisma/@anthropic/bullmq no domain; application pode `@nestjs/common`).
 - Provider de IA = **Claude/Anthropic** (D-01); "tool use" com JSON Schema forçado (`tool_choice`), não "Structured Outputs".
 - **Backlog (fora de Sprint):** documentar API via `@nestjs/swagger` (`SwaggerModule` em `/api`). Não pedido em TASK; humano quer futuramente. Endpoints: `POST /auth/login`, `POST /usuarios`, `POST /chamados`, `PATCH /chamados/:id/status`, `GET /chamados`.
