@@ -1,0 +1,21 @@
+{
+  "$schema": "vote.v1",
+  "vote_id": "2026-08-11_001_finops",
+  "question_id": "2026-08-11_001",
+  "squad": "squad-finops",
+  "options_evaluated": [
+    { "id": "A", "label": "Colunas original_*/final_* direto no model Ticket" },
+    { "id": "B", "label": "Tabela Classificacao dedicada (original + final)" }
+  ],
+  "choice": "A",
+  "rationale": "Toda leitura de chamado (listar, abrir, histórico) já busca o Ticket; embutir a classificação evita join extra e risco de N+1 nas listas do funcionário. A métrica de concordância (read-time, sobre todos os elegíveis) é um scan único da tabela tickets, sem juntar com classificacao. ~11 colunas enum/text a mais é custo de storage desprezível; o ganho é em latência de leitura (alvo p95<500ms do PRD para rotas síncronas).",
+  "evidence": [
+    "prd.md:194 (p95<500ms nas rotas síncronas de criação/listagem)",
+    "prd.md:54 (concordância = agregação em tempo de leitura sobre original vs final)"
+  ],
+  "confidence": 0.75,
+  "concerns": [
+    "Se a classificação evoluísse para histórico de versões (N por ticket), colunas embutidas não escalariam — mas v1 é 1 original + 1 final"
+  ],
+  "created_at": "2026-08-11T17:19:57-03:00"
+}
