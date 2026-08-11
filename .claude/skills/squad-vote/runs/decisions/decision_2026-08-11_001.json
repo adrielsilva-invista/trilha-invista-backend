@@ -1,0 +1,35 @@
+{
+  "$schema": "decision.v2",
+  "question_id": "2026-08-11_001",
+  "question": "Modelagem da classificação original-da-IA (imutável) vs final (editável pelo funcionário) no schema Prisma: A) colunas original_*/final_* no Ticket vs B) tabela Classificacao dedicada.",
+  "context": "Sprint-2 TASK-07 (schema classificação + histórico); prisma/schema.prisma",
+  "classification": "tecnica",
+  "destructive_detected": false,
+  "destructive_pattern": null,
+  "squads_invited": [
+    "squad-backend",
+    "squad-finops",
+    "squad-arquitetura"
+  ],
+  "tiebreaker_squad": "squad-arquitetura",
+  "votes": [
+    "2026-08-11_001_backend",
+    "2026-08-11_001_finops",
+    "2026-08-11_001_arquitetura"
+  ],
+  "tally": {
+    "A": 3,
+    "B": 0
+  },
+  "winner": "A",
+  "synthesis": null,
+  "tiebreaker_used": false,
+  "average_confidence": 0.76,
+  "mode": "dry_run",
+  "humano_consultado": true,
+  "humano_choice": "A",
+  "humano_match": true,
+  "applied_in": "sprint-2.task-07",
+  "created_at": "2026-08-11T17:19:57-03:00",
+  "notes": "Unânime A (colunas no Ticket). Classificação é 1:1 com o Ticket (não coleção) → tabela dedicada é YAGNI. Concordância vira comparação de colunas sem join; reclassificação é update de coluna. GUARD acordado nos 3 votos: imutabilidade da original é invariante de APLICAÇÃO (Postgres não impõe sem trigger) — documentar no domínio e cobrir com teste na TASK-07/11/13. Campos: original_{categoria,prioridade,area,sentimento}, final_{categoria,prioridade,area,sentimento} (enums), resumo (≤300 char, read-only), ia_modelo, ia_versao. Todos nullable (chamado nasce sem classificação; caminho manual RF-05 preenche final sem original)."
+}

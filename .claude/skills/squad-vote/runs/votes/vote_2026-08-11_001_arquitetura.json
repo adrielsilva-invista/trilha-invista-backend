@@ -1,0 +1,22 @@
+{
+  "$schema": "vote.v1",
+  "vote_id": "2026-08-11_001_arquitetura",
+  "question_id": "2026-08-11_001",
+  "squad": "squad-arquitetura",
+  "options_evaluated": [
+    { "id": "A", "label": "Colunas original_*/final_* direto no model Ticket" },
+    { "id": "B", "label": "Tabela Classificacao dedicada (original + final)" }
+  ],
+  "choice": "A",
+  "rationale": "A classificação é 1:1 com o Ticket (um original imutável + um final), não uma coleção — uma tabela dedicada adiciona uma entidade e um join sem ganho de cardinalidade (YAGNI). A classificação faz parte do agregado Ticket no domínio (Screaming Architecture: o Ticket 'grita' seu estado de triagem). Voto A com a ressalva de que a imutabilidade da original precisa ser guard explícito na camada de aplicação nas duas opções — Postgres não a impõe sem trigger, e trigger seria cerimônia fora do escopo.",
+  "evidence": [
+    "plan-build/spec.md:52-62 (Clean Arch por módulo, Screaming Architecture, agregado por domínio)",
+    "plan-build/spec.md:65-71 (boundaries: ports por dependência externa, não por sub-entidade interna)",
+    "prd.md:107 (original imutável para comparação futura)"
+  ],
+  "confidence": 0.72,
+  "concerns": [
+    "Imutabilidade da original é invariante de aplicação, não de schema — documentar no domínio e cobrir com teste"
+  ],
+  "created_at": "2026-08-11T17:19:57-03:00"
+}

@@ -40,9 +40,18 @@ TASK-03 | [██████████] | Admin cria usuário (RF-02)        
 TASK-04 | [██████████] | Cliente abre chamado (RF-03)               | ✅ CONCLUÍDA
 TASK-05 | [██████████] | Máquina de estados do chamado (RF-09)      | ✅ CONCLUÍDA
 TASK-06 | [██████████] | Cliente acompanha seus chamados (RF-10)    | ✅ CONCLUÍDA
+
+Sprint-2 — IA + fila + atribuição + histórico
+TASK-07 | [██████████] | Schema classificação + histórico (RF-04/11) | ✅ CONCLUÍDA (migrate classificacao_historico)
+TASK-08 | [░░░░░░░░░░] | Histórico append-only (RF-11)              | ⬜ A FAZER
+TASK-09 | [░░░░░░░░░░] | Fila + worker fake (RF-06)                 | ⬜ A FAZER
+TASK-10 | [░░░░░░░░░░] | Gateway Claude real (RF-04)                | ⬜ A FAZER
+TASK-11 | [░░░░░░░░░░] | Caminho feliz classifica→atribui (RF-04+07)| ⬜ A FAZER
+TASK-12 | [░░░░░░░░░░] | Tolerância a falha (RF-05)                 | ⬜ A FAZER
+TASK-13 | [░░░░░░░░░░] | Reclassificação funcionário (RF-08)        | ⬜ A FAZER
 ```
 
-Progresso geral: 6/6 TASKs (100%) — Sprint-1 concluída
+Progresso geral: Sprint-1 6/6 (100%) ✅ · Sprint-2 1/7 (14%) 🟡
 
 **Resultado dos testes:**
 ```
@@ -308,6 +317,36 @@ jest | 41/41 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 
 ---
 
+### Sessão 2026-08-11 — TASK-07 (schema classificação + histórico, RF-04/11) + squad-vote inaugural
+
+**Tasks trabalhadas:** TASK-07 (primeira da Sprint-2)
+**Status ao encerrar:** ✅ TASK-07 concluída (`feat/schema-classificacao-historico`) — migração aplicada, gate exit 0
+
+**O que foi feito:**
+- **Schema (`prisma/schema.prisma`)**: enums `Categoria`/`Prioridade`/`Area`/`Sentimento` (valores pt-BR = contrato com a IA e com a métrica de concordância) + `TicketEventType` (CLASSIFICACAO_IA/FALHA_CLASSIFICACAO/RECLASSIFICACAO/ATRIBUICAO/MUDANCA_STATUS). No `Ticket`: colunas `original_{categoria,prioridade,area,sentimento}` (IA, imutável) + `final_{...}` (editável, RF-08) + `resumo` `@db.VarChar(300)` read-only + `ia_modelo`/`ia_versao` (tracing RF-11) + flag `classificacao_manual_pendente`. Todas nullable (chamado nasce sem classificação; caminho manual RF-05 preenche `final` sem `original`). Model `TicketEvent` append-only (`payload Json`, `authorId` null=sistema, `@@index([ticketId, createdAt])`).
+- **Migração** `20260811203041_classificacao_historico` aplicada; cliente Prisma regenerado.
+- **squad-vote 2026-08-11_001** (primeiro real, modo `dry_run`): modelagem original-vs-final → **A) colunas no Ticket** vs B) tabela `Classificacao`. Unânime A=3 (backend .80 / finops .75 / arquitetura .72), avg .76. Razão: classificação é 1:1 com o Ticket (não coleção) → tabela dedicada = YAGNI; concordância vira comparação de colunas sem join. Humano confirmou A (`humano_match: true`). Artefatos em `runs/votes/` + `runs/decisions/`.
+
+**Decisões:** squad-vote 2026-08-11_001 → opção A (colunas no Ticket), aplicada em TASK-07.
+
+**Aprendizado (registrado em memória):** squad-vote só para trade-off real; decisão reversível+óbvia+unânime é cerimônia. Progress.md/Sprint no **mesmo PR** da task.
+
+**GUARD para TASK-11/13:** imutabilidade da `original_*` é invariante de APLICAÇÃO (Postgres não impõe sem trigger) — garantir no use case + teste, não no schema.
+
+**O que ficou pendente:**
+- TASK-08 (histórico append-only, RF-11) é a próxima.
+- squad-vote segue em `dry_run` (Fase 1): 1/10 decisões rumo a `assisted` (gatilho `humano_match ≥ 0.7` em 10).
+
+**Próximo passo exato:**
+> Branch `feat/historico-chamado` a partir da dev: porta `RegistrarEventoUseCase` + repo append-only + `GET /chamados/:id/historico` (ADMIN full / FUNCIONARIO restrito) + emitir `MUDANCA_STATUS` nas transições da TASK-05.
+
+**Sensores rodados:**
+- [x] npx prisma validate — schema válido
+- [x] migrate dev — aplicada + client gerado
+- [x] bash .harness/quality-gate.sh — exit 0 (coverage 66.37 / dup 0 / lint 0 / maior arquivo 198 / compliance 0)
+
+---
+
 ## Template para próximas sessões
 
 Copiar e preencher ao encerrar a sessão:
@@ -342,8 +381,9 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** **TASK-07** (schema da classificação + histórico) — primeira da Sprint-2, já planejada em `Sprint-2.md`. Branch `feat/schema-classificacao-historico` a partir da dev. Adiciona enums (Categoria/Prioridade/Area/Sentimento/TicketEventType), campos original-IA-imutável + final + flag `classificacao_manual_pendente` no `Ticket`, e model `TicketEvent` append-only. **Antes de codar a modelagem original-vs-final: rodar `squad-vote`** (colunas no Ticket vs tabela `Classificacao`).
+**Começar em:** **TASK-08** (histórico append-only, RF-11) — segunda da Sprint-2, planejada em `Sprint-2.md`. Branch `feat/historico-chamado` a partir da dev. Cria porta `RegistrarEventoUseCase` + repo append-only (só create/read, nunca update/delete), `GET /chamados/:id/historico` (ADMIN vê tudo / FUNCIONARIO restrito ao atribuído), e emite `MUDANCA_STATUS` nas transições já existentes (TASK-05).
 **Contexto crítico:**
+- **TASK-07 ✅ CONCLUÍDA**: schema da classificação + histórico migrado (`classificacao_historico`). Enums Categoria/Prioridade/Area/Sentimento/TicketEventType; colunas `original_*` (IA imutável) + `final_*` (editável) + `resumo`≤300 + `ia_modelo`/`ia_versao` + flag `classificacao_manual_pendente` no `Ticket`; model `TicketEvent` append-only (`@@index([ticketId, createdAt])`). Modelagem decidida via squad-vote 2026-08-11_001 → **opção A** (colunas no Ticket, unânime A=3; classificação é 1:1 com Ticket, não coleção → tabela dedicada = YAGNI). **GUARD**: imutabilidade da `original` é invariante de APLICAÇÃO (Postgres não impõe sem trigger) — cobrir no use case + teste nas TASK-11/13.
 - **Sprint-2 planejada**: `Sprint-2.md` escrito com 7 TASKs (07..13) Builder↔Evaluator. Recorte: 07 schema, 08 histórico (RF-11), 09 fila+worker fake (RF-06), 10 gateway Claude real (RF-04), 11 caminho feliz classifica→atribui→OPEN (RF-04+07), 12 tolerância a falha (RF-05), 13 reclassificação funcionário (RF-08). Ordem por dependência.
 - **Chamada real ao Claude = só na TASK-10.** TASK-09 roda a fila com gateway **fake** (zero API). Teste da TASK-10 = **mock + e2e real opt-in** (bate na Anthropic só se `ANTHROPIC_API_KEY` no ambiente). Humano põe a key no `.env` local **quando a TASK-10 começar** — avisar. Key nunca no repo/chat/CI.
 - **Sprint-1 100% fechada**: auth/RBAC, CRUD usuário, abrir chamado, máquina de estados, listar meus chamados. e2e reais contra Postgres verdes (20/20). Gate exit 0 (coverage 66.37).

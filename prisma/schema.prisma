@@ -1,7 +1,7 @@
-// Schema Prisma — TASK-01 (fundação, sem IA).
+// Schema Prisma — TASK-01 (fundação) + TASK-07 (classificação IA + histórico, Sprint-2).
 // Nomes físicos em inglês snake_case (@map/@@map); soft delete via deletedAt.
-// Campos de classificação por IA (categoria/prioridade/area/sentimento/resumo),
-// atribuição e histórico entram na Sprint-2. Ver plan-build/spec.md e Sprint-1.md.
+// Classificação: colunas original_* (IA, imutável) + final_* (editável) direto no Ticket
+// (squad-vote 2026-08-11_001, opção A). Histórico append-only em TicketEvent.
 
 generator client {
   provider = "prisma-client-js"
@@ -26,6 +26,48 @@ enum TicketStatus {
   IN_PROGRESS
   RESOLVED
   CANCELLED
+}
+
+// Enums de classificação (RF-04). Valores pt-BR = contrato com a IA (tool use) e a métrica
+// de concordância; semântica de cada valor vem do Anexo A (B-01, não bloqueia o schema).
+enum Categoria {
+  PROBLEMA_TECNICO
+  DUVIDA
+  RECLAMACAO
+  SOLICITACAO
+  OUTROS
+}
+
+enum Prioridade {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum Area {
+  ENGENHARIA
+  QUALIDADE
+  LOGISTICA
+  COMERCIAL
+  SUPORTE_TECNICO
+  OUTROS
+}
+
+enum Sentimento {
+  POSITIVO
+  NEUTRO
+  NEGATIVO
+  FRUSTRADO
+}
+
+// Tipos de evento do histórico append-only (RF-11).
+enum TicketEventType {
+  CLASSIFICACAO_IA
+  FALHA_CLASSIFICACAO
+  RECLASSIFICACAO
+  ATRIBUICAO
+  MUDANCA_STATUS
 }
 
 model User {
@@ -55,12 +97,52 @@ model Ticket {
   authorId Int  @map("author_id")
   author   User @relation("TicketAuthor", fields: [authorId], references: [id], onDelete: Restrict)
 
-  // Atribuição a funcionário é RF-07 (Sprint-2); nasce nulo na v1 desta sprint.
+  // Atribuição a funcionário (RF-07); nasce nulo, worker/funcionário preenche na Sprint-2.
   assigneeId Int?  @map("assignee_id")
   assignee   User? @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  // Classificação (RF-04). Nullable: chamado nasce sem classificação. Caminho manual (RF-05)
+  // preenche os final_* sem original_*. IMUTABILIDADE da original é invariante de APLICAÇÃO
+  // (Postgres não a impõe sem trigger) — garantida no use case + teste, não no schema.
+  // ponytail: sem trigger de imutabilidade; se o dado real exigir, subir p/ constraint/trigger.
+  classificacaoManualPendente Boolean @default(false) @map("classificacao_manual_pendente")
+
+  originalCategoria  Categoria?  @map("original_categoria")
+  originalPrioridade Prioridade? @map("original_prioridade")
+  originalArea       Area?       @map("original_area")
+  originalSentimento Sentimento? @map("original_sentimento")
+
+  finalCategoria  Categoria?  @map("final_categoria")
+  finalPrioridade Prioridade? @map("final_prioridade")
+  finalArea       Area?       @map("final_area")
+  finalSentimento Sentimento? @map("final_sentimento")
+
+  // resumo é read-only (só a IA escreve, RF-04); modelo/versão para tracing (RF-11).
+  resumo   String? @db.VarChar(300)
+  iaModelo String? @map("ia_modelo")
+  iaVersao String? @map("ia_versao")
+
+  events TicketEvent[]
 
   @@index([authorId])
   @@index([assigneeId])
   @@index([status])
   @@map("tickets")
+}
+
+// Trilha imutável de eventos por chamado (RF-11). Append-only: o repositório (TASK-08)
+// só expõe create/read — nunca update/delete, é o que garante a imutabilidade.
+// payload guarda o específico de cada tipo (antes→depois, tentativa, critério, campos da IA).
+model TicketEvent {
+  id        Int             @id @default(autoincrement())
+  ticketId  Int             @map("ticket_id")
+  ticket    Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  type      TicketEventType
+  payload   Json
+  // Autor da ação: id do funcionário, ou null quando é o sistema (classificação/atribuição automática).
+  authorId  Int?            @map("author_id")
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_events")
 }
