@@ -25,7 +25,7 @@ CONVENÇÕES OBRIGATÓRIAS DESTE ARQUIVO (não apagar):
 | Sprint | Status | Início | Conclusão |
 |--------|--------|--------|-----------|
 | Sprint-0: Setup do harness + CI GitFlow | ✅ CONCLUÍDA | 2026-08-07 | 2026-08-07 |
-| Sprint-1: Fundação (auth, usuários, ciclo do chamado — sem IA) | 🟡 EM ANDAMENTO | 2026-08-07 | — |
+| Sprint-1: Fundação (auth, usuários, ciclo do chamado — sem IA) | ✅ CONCLUÍDA | 2026-08-07 | 2026-08-11 |
 | Sprint-2: IA + fila + atribuição + histórico | 🔴 PENDENTE | — | — |
 
 ---
@@ -39,20 +39,21 @@ TASK-02 | [██████████] | Autenticação e RBAC (RF-01)      
 TASK-03 | [██████████] | Admin cria usuário (RF-02)                 | ✅ CONCLUÍDA
 TASK-04 | [██████████] | Cliente abre chamado (RF-03)               | ✅ CONCLUÍDA
 TASK-05 | [██████████] | Máquina de estados do chamado (RF-09)      | ✅ CONCLUÍDA
-TASK-06 | [░░░░░░░░░░] | Cliente acompanha seus chamados (RF-10)    | 🔴 PENDENTE
+TASK-06 | [██████████] | Cliente acompanha seus chamados (RF-10)    | ✅ CONCLUÍDA
 ```
 
-Progresso geral: 5/6 TASKs (83%)
+Progresso geral: 6/6 TASKs (100%) — Sprint-1 concluída
 
 **Resultado dos testes:**
 ```
-jest | 39/39 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaService (2), app (1),
+jest | 41/41 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaService (2), app (1),
              | CriarUsuarioUseCase (3), PrismaUsuarioRepository (3), UsuarioController (1),
-             | chamado domain (2), AbrirChamadoUseCase (1), PrismaChamadoRepository (3), ChamadoController (2),
-             | transicoes (6), MudarStatusUseCase (4)
+             | chamado domain (2), AbrirChamadoUseCase (1), PrismaChamadoRepository (3), ChamadoController (3),
+             | transicoes (6), MudarStatusUseCase (4), ListarMeusChamadosUseCase (1)
++ e2e real (Postgres) | 20/20 | auth, usuario, chamados (abrir/transicionar/listar RF-10)
 ```
 **Build:** ✅ `tsc --noEmit` limpo
-**bash .harness/quality-gate.sh:** exit 0 (coverage 65.58 / dup 0 / lint 0 / maior arquivo 79 / compliance skip)
+**bash .harness/quality-gate.sh:** exit 0 (coverage 66.37 / dup 0 / lint 0 / maior arquivo 198 / compliance 0)
 
 ---
 
@@ -277,6 +278,34 @@ jest | 39/39 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 - [x] grep compliance — só `.env` local não-trackeado (gate skip)
 - [x] grep secrets — limpo (nada trackeado)
 
+### Sessão 2026-08-11 — e2e reais contra Postgres + endurecimento do gate + TASK-06 (RF-10)
+
+**Tasks trabalhadas:** e2e reais (TASK-01..05), manutenção de harness, TASK-06
+**Status ao encerrar:** ✅ TASK-06 concluída (`feat/listar-meus-chamados`, PR #33) — **Sprint-1 fechada**
+
+**O que foi feito:**
+- **e2e reais**: com Docker/Postgres no ar, os specs mockados viraram e2e de verdade contra o container (auth, usuario, chamados). `ValidationPipe` replicado no boot e2e (vive no `main.ts`, não no AppModule); `INestApplication<App>` mata `no-unsafe-argument` do supertest. `testTimeout: 30000` no `jest-e2e.json` (boot do Nest excede o default de 5s). 20/20 e2e verdes.
+- **Endurecimento do gate** (3 pontos de revisão do humano): (a) baseline de coverage estava defasado → recalibrado ao piso real; (b) compliance-grep escopado a arquivos **trackeados** (`git ls-files`) → regra "sempre 0" vira absoluta sem asterisco (`.env` gitignored some naturalmente, planted secret em arquivo trackeado ainda é pego); (c) premissa do D-06 verificada contra a doc oficial do Prisma v7 (driver adapter mandatório) → confirmada.
+- **Workflow de branch/PR robusto**: o agente passa a criar branch, commitar, dar push (URL de token efêmero, `origin` continua SSH) e abrir PR; humano só aprova/merge. CLAUDE.md atualizado: "1 unidade de trabalho = 1 branch = 1 PR" cobre `feat/` **e** `fix/`.
+- **TASK-06** (`feat/listar-meus-chamados`): `ListarMeusChamadosUseCase` + porta `listarPorAutor(autorId)` + `ChamadoResumo`. `GET /chamados` guard `@Perfis('CLIENTE')` filtra **sempre** por `req.user.sub` — anti-IDOR fechado em duas camadas (controller lê do token; repo `where authorId` + `deletedAt: null`). Unit (usecase + controller) e e2e real (cliente vê só os próprios; 401 sem token; 403 ADMIN). Cobertura 65.58→66.37; largest_file 158→198 (bloco e2e da própria task, limite 800).
+
+**Decisões:** nenhuma nova. D-06 anotada como verificada factualmente contra a doc.
+
+**O que ficou pendente:**
+- e2e reais dependem de Docker no ar — só rodam com o container publicado em `localhost:5432`.
+- Backlog (fora de Sprint): documentar API via `@nestjs/swagger`. Não pedido em TASK.
+- Sprint-2 (IA/fila/atribuição/histórico) ainda não iniciada.
+
+**Próximo passo exato:**
+> Após merge do PR #33 (dev→main abre sozinho), iniciar planejamento/execução da Sprint-2 (RF-04..08): classificação via Claude (D-01), fila BullMQ+Redis (D-02), atribuição a funcionário (RF-07), histórico.
+
+**Sensores rodados:**
+- [x] tsc --noEmit limpo
+- [x] testes passando (41/41 unit + 20/20 e2e)
+- [x] bash .harness/quality-gate.sh — exit 0
+- [x] grep compliance — 0 (agora escopado a arquivos trackeados)
+- [x] grep secrets — limpo (nada trackeado)
+
 ---
 
 ## Template para próximas sessões
@@ -313,15 +342,12 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** TASK-06 — cliente acompanha seus chamados (RF-10), branch `feat/listar-meus-chamados` a partir de dev. `GET /chamados` guard `@Perfis('CLIENTE')`: `ListarMeusChamadosUseCase` filtra **sempre** por `authorId = req.user.sub` (nunca por query param — anti-IDOR); retorna id/body/status/timestamps. Cliente A jamais vê chamado de B.
+**Começar em:** **Sprint-2** (IA + fila + atribuição + histórico). Sprint-1 concluída (6/6). Aguardar merge do PR #33 (`feat/listar-meus-chamados`→dev; dev→main abre sozinho). Antes de codar, escrever/revisar `Sprint-2.md` fatiando RF-04..08 em TASKs Builder↔Evaluator.
 **Contexto crítico:**
-- TASK-01..05 concluídas. Migrate init aplicada. e2e contra Postgres pendentes de **Docker** — não bloqueia TASK-06 (tudo unit-testável com mocks).
-- Padrão de módulo estabelecido em `src/auth/`, `src/usuario/`, `src/chamado/`: espelhar. `PerfilGuard` põe `req.user = { sub, perfil }` — o controller lê o autor daí.
-- TASK-06 estende `src/chamado/`: novo `ListarMeusChamadosUseCase` + método `listarPorAutor(authorId)` no repo (filtra `authorId` + `deletedAt: null`), `GET /chamados` no controller. NÃO tocar em outros módulos. É a última TASK da Sprint-1.
-- **Backlog (fora da Sprint-1):** documentar API via `@nestjs/swagger` (`SwaggerModule` em `/api`). Não pedido em nenhuma TASK; humano quer futuramente, não agora. Endpoints a documentar quando entrar: `POST /auth/login`, `POST /usuarios`, `POST /chamados`, `PATCH /chamados/:id/status`, + `GET /chamados` da TASK-06.
-- Sprint-1 é **sem IA** (D-05). Não escrever nada de Claude/fila/atribuição — é Sprint-2.
-- Clean Arch adaptado (D-03): módulo Nest por domínio, camadas por pasta. Domain puro (zero import de @nestjs/@prisma/@anthropic/bullmq).
-- Reuso: `PasswordHasher`/`BcryptPasswordHasher` e `PerfilGuard`+`@Perfis` já existem (TASK-02). AuthModule exporta o guard.
-- Provider de IA é **Claude** (D-01), só na Sprint-2.
+- **Sprint-1 100% fechada**: auth/RBAC, CRUD usuário, abrir chamado, máquina de estados, listar meus chamados. e2e reais contra Postgres verdes (20/20). Gate exit 0 (coverage 66.37).
+- Sprint-2 traz o risco isolado (Claude, D-01) + infra nova: **BullMQ+Redis** (D-02) adiciona Redis ao docker-compose/CI + `REDIS_URL`. Atribuição a funcionário (RF-07) usa `assigneeId` (nasce null hoje). `AWAITING_CLASSIFICATION → OPEN` só existe a partir da S2 (hoje só sai por CANCELLED).
+- Padrão de módulo em `src/auth/`, `src/usuario/`, `src/chamado/`: espelhar. Domain puro (D-03/D-08: zero import de @nestjs/@prisma/@anthropic/bullmq no domain; application pode `@nestjs/common`).
+- Provider de IA = **Claude/Anthropic** (D-01); "tool use" com JSON Schema forçado (`tool_choice`), não "Structured Outputs".
+- **Backlog (fora de Sprint):** documentar API via `@nestjs/swagger` (`SwaggerModule` em `/api`). Não pedido em TASK; humano quer futuramente. Endpoints: `POST /auth/login`, `POST /usuarios`, `POST /chamados`, `PATCH /chamados/:id/status`, `GET /chamados`.
+- **Workflow**: agente cria branch (`feat/**` ou `fix/**`), commita, dá push (token efêmero; `origin` continua SSH) e abre PR; humano só aprova/merge. 1 unidade = 1 branch = 1 PR. Progress.md atualizado **no mesmo PR** da task (não depois).
 - B-02: config de repo (Branch Protection + permissão Actions) é ação do humano.
-- Cada TASK vira uma branch `feat/**` → gate → auto-PR pra dev → merge manual → auto-PR pra main → merge manual.

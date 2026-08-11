@@ -228,8 +228,10 @@ npm test -- --testPathPatterns=chamado
 ```
 
 **Critério de aceite:**
-- [ ] Testes provam isolamento por cliente (IDOR bloqueado).
-- [ ] Cobertura não caiu; lint limpo.
+- [x] Testes provam isolamento por cliente (IDOR bloqueado).
+- [x] Cobertura não caiu; lint limpo.
+
+> **Status:** ✅ concluída (`feat/listar-meus-chamados`, PR #33). Anti-IDOR em duas camadas (controller filtra `req.user.sub`; repo `where authorId` + `deletedAt: null`). Unit + e2e real (cliente vê só os próprios; 401 sem token; 403 ADMIN). Gate exit 0; coverage 65.58→66.37.
 
 ---
 
@@ -256,8 +258,8 @@ git diff origin/main -- '*.env*' '*.json' '*.yml' | grep -iE 'token|secret|passw
 
 ## Critério de aceite do sprint
 
-- [ ] TASK-01..06 com status ✅ no `Progress.md`.
-- [ ] `bash .harness/quality-gate.sh` exit 0.
-- [ ] PR de cada feat mergeado em `main` (via dev, fluxo GitFlow do CI).
-- [ ] `Progress.md` atualizado com fechamento de sprint.
-- [ ] Baseline atualizado se cobertura melhorou (ver `plan-build/quality-gate.md`).
+- [x] TASK-01..06 com status ✅ no `Progress.md`.
+- [x] `bash .harness/quality-gate.sh` exit 0.
+- [~] PR de cada feat mergeado em `main` (via dev, fluxo GitFlow do CI). — TASK-06 no PR #33, aguardando merge do humano.
+- [x] `Progress.md` atualizado com fechamento de sprint.
+- [x] Baseline atualizado se cobertura melhorou (ver `plan-build/quality-gate.md`).
