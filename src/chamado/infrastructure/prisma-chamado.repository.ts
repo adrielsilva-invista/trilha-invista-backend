@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type {
   ChamadoCriado,
   ChamadoEstado,
+  ChamadoResumo,
   ChamadoRepository,
 } from '../application/ports';
 import type { NovoChamado } from '../domain/chamado';
@@ -40,6 +41,21 @@ export class PrismaChamadoRepository implements ChamadoRepository {
       where: { id },
       data: { status },
       select: PUBLICO,
+    });
+  }
+
+  // where authorId fecha o IDOR no banco; deletedAt: null esconde soft-deleted.
+  listarPorAutor(autorId: number): Promise<ChamadoResumo[]> {
+    return this.prisma.ticket.findMany({
+      where: { authorId: autorId, deletedAt: null },
+      select: {
+        id: true,
+        body: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 }
