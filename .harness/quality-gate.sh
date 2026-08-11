@@ -43,6 +43,7 @@ run_collector() {
 
 echo "==> Rodando coletores"
 
+tst=$(run_collector "tests"        "$COLLECTORS/tests.sh")
 cov=$(run_collector "coverage"     "$COLLECTORS/coverage.sh")
 dup=$(run_collector "duplication"  "$COLLECTORS/duplication.sh")
 lnt=$(run_collector "lint"         "$COLLECTORS/lint.sh")
@@ -51,22 +52,19 @@ cmp=$(run_collector "compliance"   "$COLLECTORS/compliance-grep.sh")
 
 # Agrega tudo num único JSON. Usa node se disponível; senão concatenação simples.
 if command -v node >/dev/null 2>&1; then
-  node - <<EOF > "$METRICS"
+  # JSONs passam por argv (não por template-literal) — imune a backtick/${} vindo
+  # dos matches do compliance-grep (ex.: kanban.mjs). Ver bug do merge do kanban.
+  node -e '
 const merge = (...objs) => Object.assign({}, ...objs.map(s => { try { return JSON.parse(s); } catch { return {}; } }));
-const out = merge(
-  \`$cov\`,
-  \`$dup\`,
-  \`$lnt\`,
-  \`$sz\`,
-  \`$cmp\`
-);
+const out = merge(...process.argv.slice(1));
 out.generated_at = new Date().toISOString();
 process.stdout.write(JSON.stringify(out, null, 2));
-EOF
+' "$tst" "$cov" "$dup" "$lnt" "$sz" "$cmp" > "$METRICS"
 else
   # Fallback grosseiro sem node
   {
     echo "{"
+    echo "  \"tests\":       $tst,"
     echo "  \"coverage\":    $cov,"
     echo "  \"duplication\": $dup,"
     echo "  \"lint\":        $lnt,"
