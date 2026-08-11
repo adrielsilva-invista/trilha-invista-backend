@@ -43,18 +43,29 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 python3 - "$ROOT" "$QGATE" <<'PYEOF'
-import os, re, sys, json
+import os, re, sys, json, subprocess
 
 ROOT = sys.argv[1]
 QGATE = sys.argv[2]
+
+# Só arquivos trackeados no git entram na varredura. É o que torna "sempre 0"
+# absoluto sem asterisco: .env (gitignored) e artefatos não-versionados somem
+# por definição, não por glob de exceção.
+try:
+    out = subprocess.run(["git", "-C", ROOT, "ls-files", "-z"],
+                          capture_output=True, text=True, check=True).stdout
+    TRACKED = {p.replace("\\", "/") for p in out.split("\0") if p}
+except (subprocess.CalledProcessError, FileNotFoundError):
+    TRACKED = None  # sem git → cai pro comportamento antigo (walk + exclusões)
 
 EXCLUDE_DIRS = {
     "node_modules", ".git", ".harness", "plan-build", "dist", "build", "out",
     "bin", "obj", "coverage", ".next", ".venv", "venv", "__pycache__", "vendor",
     "scripts",  # tooling CLI (.mjs geradores etc.) — não é código de app Nest
 }
-# .env* é secret-store por design (é ONDE o secret deve morar) — escaneá-lo é falso-positivo.
-EXCLUDE_FILE_GLOBS = ["*.example", ".env", ".env.*", "*.lock", "*.min.js", "*.map", "bootstrap_harness.py"]
+# Só escaneia arquivos TRACKEADOS no git (git ls-files). Regra "sempre 0" sem
+# asterisco: .env é gitignored, então some por natureza — não por exceção especial.
+EXCLUDE_FILE_GLOBS = ["*.example", "*.lock", "*.min.js", "*.map"]
 TEST_PATH_MARKERS = ["/test/", "/tests/", "/mocks/", "/__mocks__/"]
 TEST_NAME_MARKERS = ["_test.", ".test.", "_spec.", ".spec."]
 
@@ -184,6 +195,8 @@ for dirpath, dirnames, filenames in os.walk(ROOT):
             continue
         full = os.path.join(dirpath, fname)
         rel = os.path.relpath(full, ROOT)
+        if TRACKED is not None and rel.replace("\\", "/") not in TRACKED:
+            continue
         if is_test_path(rel):
             continue
         try:
