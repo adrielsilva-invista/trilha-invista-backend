@@ -1,0 +1,22 @@
+{
+  "$schema": "vote.v1",
+  "vote_id": "2026-08-11_001_backend",
+  "question_id": "2026-08-11_001",
+  "squad": "squad-backend",
+  "options_evaluated": [
+    { "id": "A", "label": "Colunas original_*/final_* direto no model Ticket" },
+    { "id": "B", "label": "Tabela Classificacao dedicada (original + final)" }
+  ],
+  "choice": "A",
+  "rationale": "Worker sequencial (RF-06) persiste original+final numa única linha do Ticket; reclassificação do funcionário (RF-08) é update de coluna, sem linha nova. Concordância original==final vira comparação de colunas na mesma linha, sem join. Repository e ports do módulo classificacao/chamado ficam mais enxutos — menos boilerplate que manter uma entidade Classificacao com seu próprio port/repo.",
+  "evidence": [
+    "prd.md:131 (atribuição/classificação é saída serial do worker)",
+    "prd.md:146 (reclassifica campo a campo, final atualizada, original preservada)",
+    "plan-build/spec.md:39 (fluxo worker in-process sequencial)"
+  ],
+  "confidence": 0.8,
+  "concerns": [
+    "Imutabilidade da original é regra de aplicação (nada no banco impede update das colunas original_*)"
+  ],
+  "created_at": "2026-08-11T17:19:57-03:00"
+}

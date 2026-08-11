@@ -83,10 +83,10 @@ npx prisma validate
 npx prisma generate
 ```
 
-**Critério de aceite:**
-- [ ] Migração aplica limpa; `prisma validate` passa; client gera.
-- [ ] `squad-vote` da modelagem original-vs-final registrado em `runs/decisions/`.
-- [ ] Nada fora do "Diff esperado" foi tocado.
+**Critério de aceite:** ✅ CONCLUÍDA (`feat/schema-classificacao-historico`, migração `20260811203041_classificacao_historico`)
+- [x] Migração aplica limpa; `prisma validate` passa; client gera.
+- [x] `squad-vote` da modelagem original-vs-final registrado em `runs/decisions/` (2026-08-11_001 → opção A, unânime).
+- [x] Nada fora do "Diff esperado" foi tocado.
 
 ---
 
