@@ -20,5 +20,8 @@ report/
 # editor / os
 .DS_Store
 *.log
+
+# kanban snapshot (gerado por `npm run kanban` a partir do Progress.md)
+kanban.html
 # Added by code-review-graph
 .code-review-graph/
