@@ -28,9 +28,10 @@ enum TicketStatus {
   CANCELLED
 }
 
-// Enums de classificação (RF-04). Valores pt-BR = contrato com a IA (tool use) e a métrica
-// de concordância; semântica de cada valor vem do Anexo A (B-01, não bloqueia o schema).
-enum Categoria {
+// Enums de classificação (RF-04). Nome do TIPO em inglês (padrão físico do schema);
+// os VALORES ficam em pt-BR de propósito = contrato com a IA (tool use) e a métrica de
+// concordância; semântica de cada valor vem do Anexo A (B-01, não bloqueia o schema).
+enum Category {
   PROBLEMA_TECNICO
   DUVIDA
   RECLAMACAO
@@ -38,7 +39,7 @@ enum Categoria {
   OUTROS
 }
 
-enum Prioridade {
+enum Priority {
   BAIXA
   MEDIA
   ALTA
@@ -54,7 +55,7 @@ enum Area {
   OUTROS
 }
 
-enum Sentimento {
+enum Sentiment {
   POSITIVO
   NEUTRO
   NEGATIVO
@@ -105,22 +106,22 @@ model Ticket {
   // preenche os final_* sem original_*. IMUTABILIDADE da original é invariante de APLICAÇÃO
   // (Postgres não a impõe sem trigger) — garantida no use case + teste, não no schema.
   // ponytail: sem trigger de imutabilidade; se o dado real exigir, subir p/ constraint/trigger.
-  classificacaoManualPendente Boolean @default(false) @map("classificacao_manual_pendente")
+  needsManualClassification Boolean @default(false) @map("needs_manual_classification")
 
-  originalCategoria  Categoria?  @map("original_categoria")
-  originalPrioridade Prioridade? @map("original_prioridade")
-  originalArea       Area?       @map("original_area")
-  originalSentimento Sentimento? @map("original_sentimento")
+  originalCategory  Category?  @map("original_category")
+  originalPriority  Priority?  @map("original_priority")
+  originalArea      Area?      @map("original_area")
+  originalSentiment Sentiment? @map("original_sentiment")
 
-  finalCategoria  Categoria?  @map("final_categoria")
-  finalPrioridade Prioridade? @map("final_prioridade")
-  finalArea       Area?       @map("final_area")
-  finalSentimento Sentimento? @map("final_sentimento")
+  finalCategory  Category?  @map("final_category")
+  finalPriority  Priority?  @map("final_priority")
+  finalArea      Area?      @map("final_area")
+  finalSentiment Sentiment? @map("final_sentiment")
 
-  // resumo é read-only (só a IA escreve, RF-04); modelo/versão para tracing (RF-11).
-  resumo   String? @db.VarChar(300)
-  iaModelo String? @map("ia_modelo")
-  iaVersao String? @map("ia_versao")
+  // summary é read-only (só a IA escreve, RF-04); modelo/versão para tracing (RF-11).
+  summary   String? @db.VarChar(300)
+  aiModel   String? @map("ai_model")
+  aiVersion String? @map("ai_version")
 
   events TicketEvent[]
 
