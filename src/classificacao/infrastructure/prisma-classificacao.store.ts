@@ -77,4 +77,19 @@ export class PrismaClassificacaoStore implements ClassificacaoStore {
       data: { status: 'OPEN', ...(assigneeId !== null ? { assigneeId } : {}) },
     });
   }
+
+  // Falha da IA (RF-05): marca needsManualClassification e atribui (se houver).
+  // NÃO seta status: o ticket permanece AWAITING_CLASSIFICATION p/ classificação manual.
+  async marcarFalhaEAtribuir(
+    ticketId: number,
+    assigneeId: number | null,
+  ): Promise<void> {
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        needsManualClassification: true,
+        ...(assigneeId !== null ? { assigneeId } : {}),
+      },
+    });
+  }
 }
