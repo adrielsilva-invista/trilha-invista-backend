@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsuarioModule } from './usuario/usuario.module';
 import { ChamadoModule } from './chamado/chamado.module';
 import { HistoricoModule } from './historico/historico.module';
+import { ClassificacaoModule } from './classificacao/classificacao.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { HistoricoModule } from './historico/historico.module';
     UsuarioModule,
     ChamadoModule,
     HistoricoModule,
+    ClassificacaoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

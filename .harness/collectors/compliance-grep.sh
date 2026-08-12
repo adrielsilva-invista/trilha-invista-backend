@@ -67,7 +67,7 @@ EXCLUDE_DIRS = {
 # asterisco: .env é gitignored, então some por natureza — não por exceção especial.
 EXCLUDE_FILE_GLOBS = ["*.example", "*.lock", "*.min.js", "*.map"]
 TEST_PATH_MARKERS = ["/test/", "/tests/", "/mocks/", "/__mocks__/"]
-TEST_NAME_MARKERS = ["_test.", ".test.", "_spec.", ".spec."]
+TEST_NAME_MARKERS = ["_test.", ".test.", "_spec.", ".spec.", ".fixture."]
 
 # ─── 1. Parsear forbidden_patterns do quality-gate.md ────────────────────────
 with open(QGATE, encoding="utf-8") as f:
