@@ -43,7 +43,7 @@ TASK-06 | [██████████] | Cliente acompanha seus chamados (RF
 
 Sprint-2 — IA + fila + atribuição + histórico
 TASK-07 | [██████████] | Schema classificação + histórico (RF-04/11) | ✅ CONCLUÍDA (migrate classificacao_historico)
-TASK-08 | [░░░░░░░░░░] | Histórico append-only (RF-11)              | ⬜ A FAZER
+TASK-08 | [██████████] | Histórico append-only (RF-11)              | ✅ CONCLUÍDA
 TASK-09 | [░░░░░░░░░░] | Fila + worker fake (RF-06)                 | ⬜ A FAZER
 TASK-10 | [░░░░░░░░░░] | Gateway Claude real (RF-04)                | ⬜ A FAZER
 TASK-11 | [░░░░░░░░░░] | Caminho feliz classifica→atribui (RF-04+07)| ⬜ A FAZER
@@ -51,18 +51,20 @@ TASK-12 | [░░░░░░░░░░] | Tolerância a falha (RF-05)        
 TASK-13 | [░░░░░░░░░░] | Reclassificação funcionário (RF-08)        | ⬜ A FAZER
 ```
 
-Progresso geral: Sprint-1 6/6 (100%) ✅ · Sprint-2 1/7 (14%) 🟡
+Progresso geral: Sprint-1 6/6 (100%) ✅ · Sprint-2 2/7 (29%) 🟡
 
 **Resultado dos testes:**
 ```
-jest | 41/41 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaService (2), app (1),
+jest | 52/52 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaService (2), app (1),
              | CriarUsuarioUseCase (3), PrismaUsuarioRepository (3), UsuarioController (1),
              | chamado domain (2), AbrirChamadoUseCase (1), PrismaChamadoRepository (3), ChamadoController (3),
-             | transicoes (6), MudarStatusUseCase (4), ListarMeusChamadosUseCase (1)
+             | transicoes (6), MudarStatusUseCase (4), ListarMeusChamadosUseCase (1),
+             | historico: eventosVisiveis (2), RegistrarEvento (1), ListarHistorico (4),
+             |            PrismaHistoricoRepository (3), HistoricoController (1)
 + e2e real (Postgres) | 20/20 | auth, usuario, chamados (abrir/transicionar/listar RF-10)
 ```
-**Build:** ✅ `tsc --noEmit` limpo
-**bash .harness/quality-gate.sh:** exit 0 (coverage 66.37 / dup 0 / lint 0 / maior arquivo 198 / compliance 0)
+**Build:** ✅ `tsc --noEmit` limpo (novos módulos; `listarPorAutor` nos mocks de spec = débito pré-existente fora de escopo)
+**bash .harness/quality-gate.sh:** exit 0 (coverage 68.84 / dup 0 / lint 0 / maior arquivo 198 / compliance 0)
 
 ---
 
@@ -347,6 +349,37 @@ jest | 41/41 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 
 ---
 
+### Sessão 2026-08-12 — TASK-08 (histórico append-only, RF-11)
+
+**Tasks trabalhadas:** TASK-08 (segunda da Sprint-2)
+**Status ao encerrar:** ✅ TASK-08 concluída (código + gate exit 0); branch/PR a cargo do humano
+
+**O que foi feito:**
+- Módulo `src/historico/` espelhando o padrão dos demais. `domain/evento.ts` puro: tipos `TicketEventType`/`NovoEvento`/`EventoHistorico` + função pura `eventosVisiveisParaFuncionario` (recorte da visão restrita — só `CLASSIFICACAO_IA` + `RECLASSIFICACAO` do próprio funcionário, per PRD RF-11 linhas 173-175).
+- `application/`: `RegistrarEventoUseCase` (**porta única de gravação** que as próximas TASKs reusam — nunca duplicar `create`) + `ListarHistoricoUseCase` (humble object: 404 se não existe, ADMIN vê tudo, FUNCIONARIO só o atribuído senão 403 anti-IDOR, delega o recorte ao domain) + `ports.ts` (`HistoricoRepository`, token `HISTORICO_REPOSITORY`, `TicketDoHistorico`).
+- `infrastructure/PrismaHistoricoRepository`: **append-only por contrato** — só `create`/`findMany` (+ `buscarTicket` p/ autorizar); a ausência de update/delete é o que garante a imutabilidade (RF-11). `listarPorTicket` em ordem cronológica asc (coberto por `@@index([ticketId, createdAt])`).
+- `GET /chamados/:id/historico` guard `@Perfis('FUNCIONARIO','ADMIN')` (CLIENTE barrado no guard); `sub`/`perfil` vêm do token, nunca do body. `HistoricoModule` **exporta** `RegistrarEventoUseCase`.
+- **Wiring**: `ChamadoModule` importa `HistoricoModule`; `MudarStatusUseCase` passa a injetar `RegistrarEventoUseCase` e registrar `MUDANCA_STATUS` (`{ de, para }` + `authorId`) após persistir a transição (TASK-05). `HistoricoModule` registrado no `app.module.ts`.
+- 52/52 unit (11 novos); cobertura 66.37→68.84; maior arquivo inalterado (198). Duplicação zerada extraindo fixture de teste `evt()` (`evento.fixture.ts`) + helper `listar()` no spec; lint via prettier `--fix`.
+
+**Decisões:** nenhuma nova. Ambiguidade "visão restrita" resolvida lendo o PRD RF-11 (fonte de verdade), não por chute.
+
+**O que ficou pendente:**
+- e2e real de `GET /chamados/:id/historico` (200 ADMIN / 200 FUNCIONARIO restrito / 403 não-atribuído / 401 sem token) contra Postgres — pende de Docker no ar, como nas TASKs anteriores. Use case + controller cobertos por unit.
+- Débito pré-existente fora de escopo: `abrir-chamado`/`mudar-status` specs têm mocks sem `listarPorAutor` → `tsc --noEmit` acusa (ts-jest transpila per-file, não barra o gate). Só ajustei o mock do arquivo que já editei (`mudar-status.spec`).
+
+**Próximo passo exato:**
+> Iniciar TASK-09 (fila + worker fake, RF-06) em branch `feat/fila-worker-fake` a partir da dev. Adiciona BullMQ+Redis (D-02) ao docker-compose/CI + `REDIS_URL` (toca B-02); gateway de IA **fake** (zero chamada à Anthropic — real só na TASK-10).
+
+**Sensores rodados:**
+- [x] tsc --noEmit — novos módulos limpos (débito pré-existente `listarPorAutor` à parte)
+- [x] testes passando (52/52 unit)
+- [x] bash .harness/quality-gate.sh — exit 0 (coverage 68.84 / dup 0 / lint 0 / maior arquivo 198 / compliance 0)
+- [x] grep compliance — 0
+- [x] grep secrets — limpo (nada trackeado)
+
+---
+
 ## Template para próximas sessões
 
 Copiar e preencher ao encerrar a sessão:
@@ -381,8 +414,9 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** **TASK-08** (histórico append-only, RF-11) — segunda da Sprint-2, planejada em `Sprint-2.md`. Branch `feat/historico-chamado` a partir da dev. Cria porta `RegistrarEventoUseCase` + repo append-only (só create/read, nunca update/delete), `GET /chamados/:id/historico` (ADMIN vê tudo / FUNCIONARIO restrito ao atribuído), e emite `MUDANCA_STATUS` nas transições já existentes (TASK-05).
+**Começar em:** **TASK-09** (fila + worker fake, RF-06) — terceira da Sprint-2, planejada em `Sprint-2.md`. Branch `feat/fila-worker-fake` a partir da dev. Adiciona **BullMQ + Redis** (D-02) ao docker-compose/CI + `REDIS_URL` (toca B-02); worker consome a fila com gateway de IA **fake** (zero chamada à Anthropic — a real entra só na TASK-10).
 **Contexto crítico:**
+- **TASK-08 ✅ CONCLUÍDA**: módulo `src/historico/` — porta única de gravação `RegistrarEventoUseCase` (as próximas TASKs reusam, nunca duplicam `create`), repo `PrismaHistoricoRepository` **append-only por contrato** (só create/findMany), `GET /chamados/:id/historico` (ADMIN full / FUNCIONARIO restrito ao atribuído, anti-IDOR via token). `MudarStatusUseCase` agora emite `MUDANCA_STATUS` a cada transição (wiring `ChamadoModule`→`HistoricoModule`). Visão restrita = função pura `eventosVisiveisParaFuncionario` (só IA + reclassificação própria, per PRD RF-11). 52/52 unit, gate exit 0 (coverage 68.84). **REUSAR `RegistrarEventoUseCase` nas TASK-09/11/13** para gravar `ATRIBUICAO`/`CLASSIFICACAO_IA`/`RECLASSIFICACAO`/`FALHA_CLASSIFICACAO`.
 - **TASK-07 ✅ CONCLUÍDA**: schema da classificação + histórico migrado (`classificacao_historico`). Enums Categoria/Prioridade/Area/Sentimento/TicketEventType; colunas `original_*` (IA imutável) + `final_*` (editável) + `resumo`≤300 + `ia_modelo`/`ia_versao` + flag `classificacao_manual_pendente` no `Ticket`; model `TicketEvent` append-only (`@@index([ticketId, createdAt])`). Modelagem decidida via squad-vote 2026-08-11_001 → **opção A** (colunas no Ticket, unânime A=3; classificação é 1:1 com Ticket, não coleção → tabela dedicada = YAGNI). **GUARD**: imutabilidade da `original` é invariante de APLICAÇÃO (Postgres não impõe sem trigger) — cobrir no use case + teste nas TASK-11/13.
 - **Sprint-2 planejada**: `Sprint-2.md` escrito com 7 TASKs (07..13) Builder↔Evaluator. Recorte: 07 schema, 08 histórico (RF-11), 09 fila+worker fake (RF-06), 10 gateway Claude real (RF-04), 11 caminho feliz classifica→atribui→OPEN (RF-04+07), 12 tolerância a falha (RF-05), 13 reclassificação funcionário (RF-08). Ordem por dependência.
 - **Chamada real ao Claude = só na TASK-10.** TASK-09 roda a fila com gateway **fake** (zero API). Teste da TASK-10 = **mock + e2e real opt-in** (bate na Anthropic só se `ANTHROPIC_API_KEY` no ambiente). Humano põe a key no `.env` local **quando a TASK-10 começar** — avisar. Key nunca no repo/chat/CI.
