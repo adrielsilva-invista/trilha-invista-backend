@@ -45,13 +45,13 @@ Sprint-2 — IA + fila + atribuição + histórico
 TASK-07 | [██████████] | Schema classificação + histórico (RF-04/11) | ✅ CONCLUÍDA (migrate classificacao_historico)
 TASK-08 | [██████████] | Histórico append-only (RF-11)              | ✅ CONCLUÍDA
 TASK-09 | [██████████] | Fila + worker fake (RF-06)                 | ✅ CONCLUÍDA
-TASK-10 | [░░░░░░░░░░] | Gateway Claude real (RF-04)                | ⬜ A FAZER
+TASK-10 | [██████████] | Gateway Claude real (RF-04)                | ✅ CONCLUÍDA
 TASK-11 | [░░░░░░░░░░] | Caminho feliz classifica→atribui (RF-04+07)| ⬜ A FAZER
 TASK-12 | [░░░░░░░░░░] | Tolerância a falha (RF-05)                 | ⬜ A FAZER
 TASK-13 | [░░░░░░░░░░] | Reclassificação funcionário (RF-08)        | ⬜ A FAZER
 ```
 
-Progresso geral: Sprint-1 6/6 (100%) ✅ · Sprint-2 3/7 (43%) 🟡
+Progresso geral: Sprint-1 6/6 (100%) ✅ · Sprint-2 4/7 (57%) 🟡
 
 **Resultado dos testes:**
 ```
@@ -411,6 +411,39 @@ jest | 52/52 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 
 ---
 
+### Sessão 2026-08-12 — TASK-10 (gateway Claude real, RF-04)
+
+**Tasks trabalhadas:** TASK-10 (quarta da Sprint-2)
+**Status ao encerrar:** ✅ TASK-10 concluída (código + gate exit 0); branch `feat/gateway-claude-real` a subir; PR/merge a cargo do humano
+
+**O que foi feito:**
+- `src/classificacao/domain/validar-resultado.ts` — validação pura (rede de segurança backend, RF-04): arrays `CATEGORIAS/PRIORIDADES/AREAS/SENTIMENTOS` como fonte de verdade dos valores aceitos + `RESUMO_MAX=300`; `validarResultado(bruto, meta)` reconfere cada campo no enum, trima e limita o resumo, injeta `modelo/versao`; fora do enum → `ResultadoInvalidoError` (TASK-12 trata como falha). Zero deps de framework.
+- `src/classificacao/infrastructure/claude-classificador.gateway.ts` — `ClaudeClassificadorGateway` via `@anthropic-ai/sdk` (`^0.116.0`): **tool use** (`registrar_classificacao` com `input_schema` dos 4 enums + `resumo` maxLength) e **`tool_choice` forçado**; modelo `claude-sonnet-5` (`ponytail:`; classificação é tarefa leve — sonnet basta); texto do cliente entra cercado em `<chamado>` como **dado não confiável**, regra anti-injeção no `system` (RF-04); valida a saída via domain antes de confiar. `ANTHROPIC_API_KEY` só de env; `throw InternalServerErrorException` se ausente (misconfig de deploy).
+- **Swap de binding**: `classificacao.module.ts` troca `CLASSIFICADOR_GATEWAY` de `FakeClassificadorGateway` → `ClaudeClassificadorGateway` (fake **fica** no repo — reusável em teste sem key). Mesma porta `ClassificadorGateway` → troca cirúrgica de 1 provider.
+- `.env.example`: `ANTHROPIC_API_KEY` (placeholder) + `ANTHROPIC_TIMEOUT_MS`.
+- Testes: `validar-resultado.spec.ts` (válido, trim, cada enum fora, resumo vazio/>300, não-objeto); `claude-classificador.gateway.spec.ts` (**mock do SDK**, sem gastar key: força `tool_choice`, **anti prompt-injection** — texto malicioso vai como conteúdo cercado, não muda a saída estrutural; rede de segurança rejeita enum inválido; falha sem `tool_use`); `test/claude-classificador.e2e-spec.ts` **opt-in** (`ANTHROPIC_API_KEY ? describe : describe.skip`).
+- Classificação: 7 suites / 21 tests. Cobertura global 69.52→71.89; maior arquivo inalterado (198); dup 0; lint 0; compliance 0.
+
+**Decisões:** nenhuma nova. Modelo = `claude-sonnet-5` (decisão do humano: modelo de teste, não precisa opus).
+
+**⚠ Segurança:** o humano colou por engano uma **chave real** da Anthropic no `.env.example` (arquivo versionado). Sanitizado para placeholder **antes de qualquer commit** (nunca foi commitada/pushada). Chave marcada para **rotação** no console da Anthropic — considerá-la comprometida (esteve em disco + chat). Chave real vai só no `.env` local (gitignored).
+
+**O que ficou pendente:**
+- e2e real depende de `ANTHROPIC_API_KEY` no ambiente do humano (pulado sem a key). Mock cobre a mecânica.
+- Atribuição + transição `AWAITING_CLASSIFICATION→OPEN` no fluxo da fila = TASK-11 (o worker ainda chama o use case da TASK-09; TASK-11 orquestra classifica→atribui→OPEN).
+
+**Próximo passo exato:**
+> Iniciar TASK-11 (caminho feliz da fila: classifica→atribui→OPEN, RF-04+07) em branch própria a partir da dev. `atribuicao.ts` (domínio puro: menor carga, desempate por menor id) + orquestração no `ClassificarChamadoUseCase` gravando `CLASSIFICACAO_IA`/`ATRIBUICAO`/`MUDANCA_STATUS` via `RegistrarEventoUseCase`.
+
+**Sensores rodados:**
+- [x] tsc --noEmit — exit 0
+- [x] testes passando (classificacao 7 suites / 21 tests)
+- [x] bash .harness/quality-gate.sh — exit 0 (coverage 71.89 / dup 0 / lint 0 / maior arquivo 198 / compliance 0)
+- [x] grep compliance — 0
+- [x] grep secrets — limpo (`.env.example` só placeholder; chave real só no `.env` local)
+
+---
+
 ## Template para próximas sessões
 
 Copiar e preencher ao encerrar a sessão:
@@ -445,9 +478,10 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** **TASK-10** (gateway Claude real, RF-04) — quarta da Sprint-2, planejada em `Sprint-2.md`. Branch própria a partir da dev. Troca `FakeClassificadorGateway` por `ClaudeClassificadorGateway` (Anthropic, D-01) usando **tool use** com JSON Schema forçado (`tool_choice`). Mesma porta `ClassificadorGateway` → é só nova impl + swap de binding no `ClassificacaoModule`. **Humano põe `ANTHROPIC_API_KEY` no `.env` local ao começar** — key nunca no repo/chat/CI. Teste = mock + e2e real opt-in (só bate na Anthropic se a key estiver no ambiente).
+**Começar em:** **TASK-11** (caminho feliz da fila: classifica→atribui→OPEN, RF-04+07) — quinta da Sprint-2, planejada em `Sprint-2.md`. Branch própria a partir da dev. `src/classificacao/domain/atribuicao.ts` (regra **pura**: funcionário de menor carga — tickets ∉ {RESOLVED, CANCELLED} —, desempate por **menor id**) + orquestração no `ClassificarChamadoUseCase`: classifica (gateway real TASK-10) → salva original+final → **atribui antes de transitar** → `AWAITING_CLASSIFICATION→OPEN` → grava `CLASSIFICACAO_IA` + `ATRIBUICAO` + `MUDANCA_STATUS(autor=sistema)` via `RegistrarEventoUseCase`. Contagem de carga = query na infra; regra pura no domínio.
 **Contexto crítico:**
-- **TASK-09 ✅ CONCLUÍDA**: módulo `src/classificacao/` — fila BullMQ (`BullmqFilaClassificacao`, idempotência via `jobId=String(ticketId)`) + worker **sequencial** (`@Processor concurrency 1`) delegando a `ClassificarChamadoUseCase`, que **reconfirma elegibilidade** (`AWAITING_CLASSIFICATION`, senão descarta) e **reusa `RegistrarEventoUseCase`** (`CLASSIFICACAO_IA`, authorId null). Gateway **fake** (`FakeClassificadorGateway`, `ponytail:`, zero API) — **é ele que a TASK-10 substitui**. `PrismaClassificacaoStore` transiciona `AWAITING_CLASSIFICATION→OPEN` gravando `original_*`=`final_*`. `AbrirChamadoUseCase` enfileira após persistir (HTTP não espera). Infra B-02: Redis no docker-compose/CI + `REDIS_URL`. 60/60 unit, gate exit 0 (coverage 69.52). Colecter do harness: `.fixture.` agora conta como teste.
+- **TASK-10 ✅ CONCLUÍDA**: `ClaudeClassificadorGateway` (`@anthropic-ai/sdk ^0.116.0`) via **tool use** + `tool_choice` forçado, modelo `claude-sonnet-5`; texto do cliente cercado em `<chamado>` como dado não confiável + regra anti-injeção no system (RF-04); `validar-resultado.ts` (domínio puro) revalida enums + `resumo`≤300 no backend (fora do enum → `ResultadoInvalidoError`, TASK-12 trata). Binding trocado no `classificacao.module.ts` (fake→real; fake fica p/ teste sem key). Teste = mock (sempre) + `test/claude-classificador.e2e-spec.ts` opt-in (só com `ANTHROPIC_API_KEY`). Gate exit 0 (coverage 71.89). **⚠ Rotacionar a chave Anthropic** que o humano colou por engano no `.env.example` (sanitizada antes de commit; nunca pushada, mas exposta em disco/chat).
+- **TASK-09 ✅ CONCLUÍDA**: módulo `src/classificacao/` — fila BullMQ (`BullmqFilaClassificacao`, idempotência via `jobId=String(ticketId)`) + worker **sequencial** (`@Processor concurrency 1`) delegando a `ClassificarChamadoUseCase`, que **reconfirma elegibilidade** (`AWAITING_CLASSIFICATION`, senão descarta) e **reusa `RegistrarEventoUseCase`** (`CLASSIFICACAO_IA`, authorId null). `PrismaClassificacaoStore` transiciona `AWAITING_CLASSIFICATION→OPEN` gravando `original_*`=`final_*`. `AbrirChamadoUseCase` enfileira após persistir (HTTP não espera). Infra B-02: Redis no docker-compose/CI + `REDIS_URL`. Colecter do harness: `.fixture.` conta como teste.
 - **TASK-08 ✅ CONCLUÍDA**: módulo `src/historico/` — porta única de gravação `RegistrarEventoUseCase` (as próximas TASKs reusam, nunca duplicam `create`), repo `PrismaHistoricoRepository` **append-only por contrato** (só create/findMany), `GET /chamados/:id/historico` (ADMIN full / FUNCIONARIO restrito ao atribuído, anti-IDOR via token). `MudarStatusUseCase` agora emite `MUDANCA_STATUS` a cada transição (wiring `ChamadoModule`→`HistoricoModule`). Visão restrita = função pura `eventosVisiveisParaFuncionario` (só IA + reclassificação própria, per PRD RF-11). 52/52 unit, gate exit 0 (coverage 68.84). **REUSAR `RegistrarEventoUseCase` nas TASK-09/11/13** para gravar `ATRIBUICAO`/`CLASSIFICACAO_IA`/`RECLASSIFICACAO`/`FALHA_CLASSIFICACAO`.
 - **TASK-07 ✅ CONCLUÍDA**: schema da classificação + histórico migrado (`classificacao_historico`). Enums Categoria/Prioridade/Area/Sentimento/TicketEventType; colunas `original_*` (IA imutável) + `final_*` (editável) + `resumo`≤300 + `ia_modelo`/`ia_versao` + flag `classificacao_manual_pendente` no `Ticket`; model `TicketEvent` append-only (`@@index([ticketId, createdAt])`). Modelagem decidida via squad-vote 2026-08-11_001 → **opção A** (colunas no Ticket, unânime A=3; classificação é 1:1 com Ticket, não coleção → tabela dedicada = YAGNI). **GUARD**: imutabilidade da `original` é invariante de APLICAÇÃO (Postgres não impõe sem trigger) — cobrir no use case + teste nas TASK-11/13.
 - **Sprint-2 planejada**: `Sprint-2.md` escrito com 7 TASKs (07..13) Builder↔Evaluator. Recorte: 07 schema, 08 histórico (RF-11), 09 fila+worker fake (RF-06), 10 gateway Claude real (RF-04), 11 caminho feliz classifica→atribui→OPEN (RF-04+07), 12 tolerância a falha (RF-05), 13 reclassificação funcionário (RF-08). Ordem por dependência.

@@ -10,7 +10,7 @@ import {
 import { CLASSIFICACAO_QUEUE } from './infrastructure/classificacao.constants';
 import { BullmqFilaClassificacao } from './infrastructure/bullmq-fila-classificacao';
 import { ClassificacaoWorker } from './infrastructure/classificacao.worker';
-import { FakeClassificadorGateway } from './infrastructure/fake-classificador.gateway';
+import { ClaudeClassificadorGateway } from './infrastructure/claude-classificador.gateway';
 import { PrismaClassificacaoStore } from './infrastructure/prisma-classificacao.store';
 
 // HistoricoModule exporta RegistrarEventoUseCase (grava CLASSIFICACAO_IA, RF-11).
@@ -25,7 +25,7 @@ import { PrismaClassificacaoStore } from './infrastructure/prisma-classificacao.
     ClassificarChamadoUseCase,
     ClassificacaoWorker,
     { provide: FILA_CLASSIFICACAO, useClass: BullmqFilaClassificacao },
-    { provide: CLASSIFICADOR_GATEWAY, useClass: FakeClassificadorGateway },
+    { provide: CLASSIFICADOR_GATEWAY, useClass: ClaudeClassificadorGateway },
     { provide: CLASSIFICACAO_STORE, useClass: PrismaClassificacaoStore },
   ],
   exports: [FILA_CLASSIFICACAO],
