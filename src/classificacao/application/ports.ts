@@ -54,5 +54,11 @@ export interface ClassificacaoStore {
   cargasDosFuncionarios(): Promise<CargaFuncionario[]>;
   // Seta o assignee (se houver) e transita AWAITING_CLASSIFICATION → OPEN.
   atribuirEAbrir(ticketId: number, assigneeId: number | null): Promise<void>;
+  // Falha da IA (RF-05): atribui (se houver) + marca needsManualClassification,
+  // mas NÃO transita — o ticket fica AWAITING_CLASSIFICATION pra classificação manual.
+  marcarFalhaEAtribuir(
+    ticketId: number,
+    assigneeId: number | null,
+  ): Promise<void>;
 }
 export const CLASSIFICACAO_STORE = 'CLASSIFICACAO_STORE';

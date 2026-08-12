@@ -47,7 +47,7 @@ TASK-08 | [██████████] | Histórico append-only (RF-11)     
 TASK-09 | [██████████] | Fila + worker fake (RF-06)                 | ✅ CONCLUÍDA
 TASK-10 | [██████████] | Gateway Claude real (RF-04)                | ✅ CONCLUÍDA
 TASK-11 | [██████████] | Caminho feliz classifica→atribui (RF-04+07)| ✅ CONCLUÍDA
-TASK-12 | [░░░░░░░░░░] | Tolerância a falha (RF-05)                 | ⬜ A FAZER
+TASK-12 | [██████████] | Tolerância a falha (RF-05)                 | ✅ CONCLUÍDA
 TASK-13 | [░░░░░░░░░░] | Reclassificação funcionário (RF-08)        | ⬜ A FAZER
 ```
 
@@ -476,6 +476,36 @@ jest | 52/52 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 
 ---
 
+### Sessão 2026-08-12 — TASK-12 tolerância a falha da IA (RF-05)
+
+**Tasks trabalhadas:** TASK-12
+**Status ao encerrar:** ✅ Concluída
+
+**O que foi feito:**
+- `src/classificacao/domain/politica-retry.ts` — regra **pura** `ehTransitorio(erro)`: `ResultadoInvalidoError` (fora do enum) / sem `status` (timeout/conexão) / `429` / `5xx` → transitório (vale 1 retry); `401/403` e demais 4xx → definitivo. Lê `.status` por **duck-typing** para não importar o SDK Anthropic (domínio puro, D-08).
+- `ClassificarChamadoUseCase`: `classificarComRetry` (1 retry só se transitório) + `fallbackManual` no `catch`. Fallback = `selecionarMenorCarga` → `marcarFalhaEAtribuir` (atribui **sem** abrir) → evento `FALHA_CLASSIFICACAO` (authorId null, payload `{motivo, assigneeId}`) + `Logger.warn` operacional. Caminho feliz intacto.
+- `ClassificacaoStore` (port) + `PrismaClassificacaoStore`: novo `marcarFalhaEAtribuir(ticketId, assigneeId|null)` — seta `needsManualClassification=true` + assignee (se houver), **NÃO** toca em `status` (fica `AWAITING_CLASSIFICATION`).
+- Testes: `politica-retry.spec.ts` (transitório/definitivo por tipo) + 4 casos no `classificar-chamado.usecase.spec.ts` (429→retry→feliz; 401→sem retry→fallback; 429 esgotado→AWAITING+manual+atribuído; fallback sem funcionário→null) + 2 no `prisma-classificacao.store.spec.ts` (marca manual sem status).
+
+**Decisões:**
+- **Timeout fica no gateway (SDK, `ANTHROPIC_TIMEOUT_MS`), não duplicado no use case** — o timeout é preocupação do adapter Anthropic; a política de retry só precisa que o erro chegue (timeout → sem `status` → transitório). Evita codar infra no application.
+- **Fallback grava só `FALHA_CLASSIFICACAO`** (com `assigneeId` no payload), não um `ATRIBUICAO` separado — segue o critério literal da Sprint-2 e mantém a atribuição auditável no mesmo evento.
+
+**O que ficou pendente:**
+- TASK-13 (reclassificação funcionário, RF-08) fecha a Sprint-2.
+- **⚠ dívida aberta**: rotacionar a chave Anthropic exposta em disco/chat na TASK-10.
+
+**Próximo passo exato:**
+> Iniciar TASK-13 (reclassificação pelo funcionário, RF-08) em branch própria a partir da dev.
+
+**Sensores rodados:**
+- [x] testes passando (classificacao 9 suites / 41 tests)
+- [x] bash .harness/quality-gate.sh — **PASS** (coverage 74.63 / dup 0 / lint 0 / maior arquivo 198 / compliance 0)
+- [x] grep compliance — 0
+- [x] grep secrets — limpo
+
+---
+
 ## Template para próximas sessões
 
 Copiar e preencher ao encerrar a sessão:
@@ -510,8 +540,9 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** **TASK-12** (tolerância a falha da IA, RF-05) — sexta da Sprint-2, planejada em `Sprint-2.md`. Branch própria a partir da dev. Falha **transitória** (timeout / 429 / 5xx / valor fora do enum → `ResultadoInvalidoError`) → **1 retry**; **não transitória** (401/403) → sem retry. Esgotado: chamado **permanece `AWAITING_CLASSIFICATION`**, seta `needsManualClassification=true`, é **atribuído mesmo assim** (RF-07, reusa `selecionarMenorCarga`/`atribuirEAbrir` da TASK-11 — mas SEM transitar p/ OPEN) e grava `FALHA_CLASSIFICACAO`. `src/classificacao/domain/politica-retry.ts` (pura: tipo do erro → retry sim/não) + envolve a chamada no `ClassificarChamadoUseCase` com timeout (`ANTHROPIC_TIMEOUT_MS`, já no `.env.example`). Abertura do chamado nunca é bloqueada pela falha.
+**Começar em:** **TASK-13** (reclassificação pelo funcionário, RF-08) — **última** da Sprint-2, planejada em `Sprint-2.md`. Branch própria a partir da dev. Funcionário edita a classificação `final_*` (a `original_*` da IA é **imutável** — invariante de aplicação, cobrir no use case + teste) e grava evento `RECLASSIFICACAO` (authorId = funcionário) via `RegistrarEventoUseCase` (reuso). Fecha a Sprint-2.
 **Contexto crítico:**
+- **TASK-12 ✅ CONCLUÍDA**: tolerância a falha da IA. `politica-retry.ts` (puro: `ehTransitorio` — fora-do-enum/timeout/429/5xx → 1 retry; 401/403 → 0). `ClassificarChamadoUseCase` envolve o gateway com retry + `fallbackManual` (atribui via `marcarFalhaEAtribuir` **sem** abrir → fica `AWAITING_CLASSIFICATION` + `needsManualClassification=true` + evento `FALHA_CLASSIFICACAO`, authorId null). Port/store ganharam `marcarFalhaEAtribuir` (não transita status). Timeout continua no gateway (SDK), não no use case. Gate PASS (coverage 74.63). **⚠ Rotacionar a chave Anthropic** da TASK-10 segue pendente.
 - **TASK-11 ✅ CONCLUÍDA**: caminho feliz da fila. `atribuicao.ts` (puro: menor carga, empate por menor id). `ClassificarChamadoUseCase` orquestra classifica→salva→`CLASSIFICACAO_IA`→cargas→atribui→abre→`ATRIBUICAO`/`MUDANCA_STATUS` (authorId null). Port `ClassificacaoStore` ganhou `cargasDosFuncionarios()`+`atribuirEAbrir()`; `salvarClassificacao` **não transita mais** (abertura só após atribuir). Carga = `user.findMany(FUNCIONARIO)` + `ticket.groupBy(status ∉ {RESOLVED,CANCELLED})`, 0 p/ quem não tem grupo. Worker inalterado. Gate exit 0 (coverage 73.26). **Para TASK-12 REUSAR** `selecionarMenorCarga` + `atribuirEAbrir` no fallback (atribui sem abrir).
 - **TASK-10 ✅ CONCLUÍDA**: `ClaudeClassificadorGateway` (`@anthropic-ai/sdk ^0.116.0`) via **tool use** + `tool_choice` forçado, modelo `claude-sonnet-5`; texto do cliente cercado em `<chamado>` como dado não confiável + regra anti-injeção no system (RF-04); `validar-resultado.ts` (domínio puro) revalida enums + `resumo`≤300 no backend (fora do enum → `ResultadoInvalidoError`, TASK-12 trata). Binding trocado no `classificacao.module.ts` (fake→real; fake fica p/ teste sem key). Teste = mock (sempre) + `test/claude-classificador.e2e-spec.ts` opt-in (só com `ANTHROPIC_API_KEY`). Gate exit 0 (coverage 71.89). **⚠ Rotacionar a chave Anthropic** que o humano colou por engano no `.env.example` (sanitizada antes de commit; nunca pushada, mas exposta em disco/chat).
 - **TASK-09 ✅ CONCLUÍDA**: módulo `src/classificacao/` — fila BullMQ (`BullmqFilaClassificacao`, idempotência via `jobId=String(ticketId)`) + worker **sequencial** (`@Processor concurrency 1`) delegando a `ClassificarChamadoUseCase`, que **reconfirma elegibilidade** (`AWAITING_CLASSIFICATION`, senão descarta) e **reusa `RegistrarEventoUseCase`** (`CLASSIFICACAO_IA`, authorId null). `PrismaClassificacaoStore` transiciona `AWAITING_CLASSIFICATION→OPEN` gravando `original_*`=`final_*`. `AbrirChamadoUseCase` enfileira após persistir (HTTP não espera). Infra B-02: Redis no docker-compose/CI + `REDIS_URL`. Colecter do harness: `.fixture.` conta como teste.
