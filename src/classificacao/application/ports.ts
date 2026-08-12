@@ -1,4 +1,5 @@
 import type { TicketStatus } from '../../chamado/domain/chamado';
+import type { CargaFuncionario } from '../domain/atribuicao';
 
 // Resultado de uma classificação (RF-04). Valores em pt-BR = contrato com a IA
 // (tool use) e a métrica de concordância; espelham os enums do schema (TASK-07).
@@ -44,9 +45,14 @@ export interface TicketParaClassificar {
 }
 export interface ClassificacaoStore {
   buscar(ticketId: number): Promise<TicketParaClassificar | null>;
+  // Grava original+final (NÃO transita: quem abre é atribuirEAbrir, após a atribuição).
   salvarClassificacao(
     ticketId: number,
     resultado: ResultadoClassificacao,
   ): Promise<void>;
+  // Carga de cada funcionário (id + tickets ativos), pro domínio escolher (RF-07).
+  cargasDosFuncionarios(): Promise<CargaFuncionario[]>;
+  // Seta o assignee (se houver) e transita AWAITING_CLASSIFICATION → OPEN.
+  atribuirEAbrir(ticketId: number, assigneeId: number | null): Promise<void>;
 }
 export const CLASSIFICACAO_STORE = 'CLASSIFICACAO_STORE';
