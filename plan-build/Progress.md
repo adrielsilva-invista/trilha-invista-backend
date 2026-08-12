@@ -46,12 +46,12 @@ TASK-07 | [██████████] | Schema classificação + histórico
 TASK-08 | [██████████] | Histórico append-only (RF-11)              | ✅ CONCLUÍDA
 TASK-09 | [██████████] | Fila + worker fake (RF-06)                 | ✅ CONCLUÍDA
 TASK-10 | [██████████] | Gateway Claude real (RF-04)                | ✅ CONCLUÍDA
-TASK-11 | [░░░░░░░░░░] | Caminho feliz classifica→atribui (RF-04+07)| ⬜ A FAZER
+TASK-11 | [██████████] | Caminho feliz classifica→atribui (RF-04+07)| ✅ CONCLUÍDA
 TASK-12 | [░░░░░░░░░░] | Tolerância a falha (RF-05)                 | ⬜ A FAZER
 TASK-13 | [░░░░░░░░░░] | Reclassificação funcionário (RF-08)        | ⬜ A FAZER
 ```
 
-Progresso geral: Sprint-1 6/6 (100%) ✅ · Sprint-2 4/7 (57%) 🟡
+Progresso geral: Sprint-1 6/6 (100%) ✅ · Sprint-2 5/7 (71%) 🟡
 
 **Resultado dos testes:**
 ```
@@ -444,6 +444,38 @@ jest | 52/52 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 
 ---
 
+### Sessão 2026-08-12 — TASK-11 caminho feliz classifica→atribui→OPEN (RF-04+07)
+
+**Tasks trabalhadas:** TASK-11
+**Status ao encerrar:** ✅ Concluída
+
+**O que foi feito:**
+- `src/classificacao/domain/atribuicao.ts` — regra **pura** `selecionarMenorCarga(cargas)`: menor `ativos`, empate por **menor `funcionarioId`**, `null` se não há funcionário. Zero deps de framework.
+- `ClassificarChamadoUseCase` orquestra o caminho feliz: classifica (gateway real) → `salvarClassificacao` → evento `CLASSIFICACAO_IA` → `cargasDosFuncionarios` → `selecionarMenorCarga` → `atribuirEAbrir` → `ATRIBUICAO` (só se houve assignee) → `MUDANCA_STATUS`. Os 3 eventos com `authorId null` (sistema), via `RegistrarEventoUseCase` (reuso, sem duplicar histórico). Mantém o descarte de idempotência (só age em `AWAITING_CLASSIFICATION`).
+- `ClassificacaoStore` (port) ganhou `cargasDosFuncionarios()` + `atribuirEAbrir(ticketId, assigneeId|null)`. `salvarClassificacao` **parou de transitar** — quem abre é `atribuirEAbrir`, garantindo "atribui **antes** de transitar".
+- `PrismaClassificacaoStore`: query de carga = `user.findMany(FUNCIONARIO ativo)` + `ticket.groupBy(status ∉ {RESOLVED,CANCELLED})` mesclados (0 quando sem grupo); `atribuirEAbrir` seta assignee (se houver) + `OPEN`.
+- Worker **inalterado** (já delegava ao use case — humble object).
+- Testes: `atribuicao.spec.ts` (menor carga / empate por id / vazio→null), `classificar-chamado.usecase.spec.ts` (ordem salvar→atribuir, 3 eventos, sem-funcionário→sem ATRIBUICAO, descarte não-AWAITING), `prisma-classificacao.store.spec.ts` atualizado (salvar não transita + cargas + atribuirEAbrir).
+
+**Decisões:**
+- Sem e2e novo: não está no diff da TASK (só use case/domínio/store) e o fluxo é coberto deterministicamente por unit tests. e2e de fluxo real fica pro Evaluator.
+- Carga incluída como 0 para funcionário sem tickets (groupBy não devolve zero) — senão quem está livre nunca seria escolhido.
+
+**O que ficou pendente:**
+- Fallback de falha (sem funcionário / erro da IA) é TASK-12; aqui só o caminho feliz.
+
+**Próximo passo exato:**
+> Iniciar TASK-12 (tolerância a falha da IA, RF-05) em branch própria a partir da dev.
+
+**Sensores rodados:**
+- [x] tsc --noEmit — exit 0
+- [x] testes passando (classificacao 8 suites / 30 tests)
+- [x] bash .harness/quality-gate.sh — exit 0 (coverage 73.26 / dup 0 / lint 0 / maior arquivo 198 / compliance 0)
+- [x] grep compliance — 0
+- [x] grep secrets — limpo
+
+---
+
 ## Template para próximas sessões
 
 Copiar e preencher ao encerrar a sessão:
@@ -478,8 +510,9 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** **TASK-11** (caminho feliz da fila: classifica→atribui→OPEN, RF-04+07) — quinta da Sprint-2, planejada em `Sprint-2.md`. Branch própria a partir da dev. `src/classificacao/domain/atribuicao.ts` (regra **pura**: funcionário de menor carga — tickets ∉ {RESOLVED, CANCELLED} —, desempate por **menor id**) + orquestração no `ClassificarChamadoUseCase`: classifica (gateway real TASK-10) → salva original+final → **atribui antes de transitar** → `AWAITING_CLASSIFICATION→OPEN` → grava `CLASSIFICACAO_IA` + `ATRIBUICAO` + `MUDANCA_STATUS(autor=sistema)` via `RegistrarEventoUseCase`. Contagem de carga = query na infra; regra pura no domínio.
+**Começar em:** **TASK-12** (tolerância a falha da IA, RF-05) — sexta da Sprint-2, planejada em `Sprint-2.md`. Branch própria a partir da dev. Falha **transitória** (timeout / 429 / 5xx / valor fora do enum → `ResultadoInvalidoError`) → **1 retry**; **não transitória** (401/403) → sem retry. Esgotado: chamado **permanece `AWAITING_CLASSIFICATION`**, seta `needsManualClassification=true`, é **atribuído mesmo assim** (RF-07, reusa `selecionarMenorCarga`/`atribuirEAbrir` da TASK-11 — mas SEM transitar p/ OPEN) e grava `FALHA_CLASSIFICACAO`. `src/classificacao/domain/politica-retry.ts` (pura: tipo do erro → retry sim/não) + envolve a chamada no `ClassificarChamadoUseCase` com timeout (`ANTHROPIC_TIMEOUT_MS`, já no `.env.example`). Abertura do chamado nunca é bloqueada pela falha.
 **Contexto crítico:**
+- **TASK-11 ✅ CONCLUÍDA**: caminho feliz da fila. `atribuicao.ts` (puro: menor carga, empate por menor id). `ClassificarChamadoUseCase` orquestra classifica→salva→`CLASSIFICACAO_IA`→cargas→atribui→abre→`ATRIBUICAO`/`MUDANCA_STATUS` (authorId null). Port `ClassificacaoStore` ganhou `cargasDosFuncionarios()`+`atribuirEAbrir()`; `salvarClassificacao` **não transita mais** (abertura só após atribuir). Carga = `user.findMany(FUNCIONARIO)` + `ticket.groupBy(status ∉ {RESOLVED,CANCELLED})`, 0 p/ quem não tem grupo. Worker inalterado. Gate exit 0 (coverage 73.26). **Para TASK-12 REUSAR** `selecionarMenorCarga` + `atribuirEAbrir` no fallback (atribui sem abrir).
 - **TASK-10 ✅ CONCLUÍDA**: `ClaudeClassificadorGateway` (`@anthropic-ai/sdk ^0.116.0`) via **tool use** + `tool_choice` forçado, modelo `claude-sonnet-5`; texto do cliente cercado em `<chamado>` como dado não confiável + regra anti-injeção no system (RF-04); `validar-resultado.ts` (domínio puro) revalida enums + `resumo`≤300 no backend (fora do enum → `ResultadoInvalidoError`, TASK-12 trata). Binding trocado no `classificacao.module.ts` (fake→real; fake fica p/ teste sem key). Teste = mock (sempre) + `test/claude-classificador.e2e-spec.ts` opt-in (só com `ANTHROPIC_API_KEY`). Gate exit 0 (coverage 71.89). **⚠ Rotacionar a chave Anthropic** que o humano colou por engano no `.env.example` (sanitizada antes de commit; nunca pushada, mas exposta em disco/chat).
 - **TASK-09 ✅ CONCLUÍDA**: módulo `src/classificacao/` — fila BullMQ (`BullmqFilaClassificacao`, idempotência via `jobId=String(ticketId)`) + worker **sequencial** (`@Processor concurrency 1`) delegando a `ClassificarChamadoUseCase`, que **reconfirma elegibilidade** (`AWAITING_CLASSIFICATION`, senão descarta) e **reusa `RegistrarEventoUseCase`** (`CLASSIFICACAO_IA`, authorId null). `PrismaClassificacaoStore` transiciona `AWAITING_CLASSIFICATION→OPEN` gravando `original_*`=`final_*`. `AbrirChamadoUseCase` enfileira após persistir (HTTP não espera). Infra B-02: Redis no docker-compose/CI + `REDIS_URL`. Colecter do harness: `.fixture.` conta como teste.
 - **TASK-08 ✅ CONCLUÍDA**: módulo `src/historico/` — porta única de gravação `RegistrarEventoUseCase` (as próximas TASKs reusam, nunca duplicam `create`), repo `PrismaHistoricoRepository` **append-only por contrato** (só create/findMany), `GET /chamados/:id/historico` (ADMIN full / FUNCIONARIO restrito ao atribuído, anti-IDOR via token). `MudarStatusUseCase` agora emite `MUDANCA_STATUS` a cada transição (wiring `ChamadoModule`→`HistoricoModule`). Visão restrita = função pura `eventosVisiveisParaFuncionario` (só IA + reclassificação própria, per PRD RF-11). 52/52 unit, gate exit 0 (coverage 68.84). **REUSAR `RegistrarEventoUseCase` nas TASK-09/11/13** para gravar `ATRIBUICAO`/`CLASSIFICACAO_IA`/`RECLASSIFICACAO`/`FALHA_CLASSIFICACAO`.
