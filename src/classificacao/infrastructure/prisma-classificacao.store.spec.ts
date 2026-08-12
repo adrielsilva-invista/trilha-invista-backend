@@ -113,4 +113,23 @@ describe('PrismaClassificacaoStore', () => {
       data: { status: 'OPEN' },
     });
   });
+
+  it('marcarFalhaEAtribuir: seta manual + assignee, SEM tocar em status', async () => {
+    const { ticket, store } = makeStore();
+    await store.marcarFalhaEAtribuir(7, 5);
+    expect(ticket.update).toHaveBeenCalledWith({
+      where: { id: 7 },
+      data: { needsManualClassification: true, assigneeId: 5 },
+    });
+    // ausência de `status` acima prova que o ticket fica AWAITING_CLASSIFICATION.
+  });
+
+  it('marcarFalhaEAtribuir: sem assignee só marca manual (fica AWAITING)', async () => {
+    const { ticket, store } = makeStore();
+    await store.marcarFalhaEAtribuir(7, null);
+    expect(ticket.update).toHaveBeenCalledWith({
+      where: { id: 7 },
+      data: { needsManualClassification: true },
+    });
+  });
 });

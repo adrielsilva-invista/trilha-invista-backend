@@ -27,6 +27,7 @@ function montar(ticket: TicketParaClassificar | null) {
     { funcionarioId: 5, ativos: 1 },
   ]);
   const atribuirEAbrir = jest.fn().mockResolvedValue(undefined);
+  const marcarFalhaEAtribuir = jest.fn().mockResolvedValue(undefined);
   const classificar = jest.fn().mockResolvedValue(RESULTADO);
 
   const store = {
@@ -34,6 +35,7 @@ function montar(ticket: TicketParaClassificar | null) {
     salvarClassificacao,
     cargasDosFuncionarios,
     atribuirEAbrir,
+    marcarFalhaEAtribuir,
   } as unknown as ClassificacaoStore;
   const gateway = { classificar } as unknown as ClassificadorGateway;
 
@@ -52,8 +54,14 @@ function montar(ticket: TicketParaClassificar | null) {
     salvarClassificacao,
     cargasDosFuncionarios,
     atribuirEAbrir,
+    marcarFalhaEAtribuir,
     classificar,
   };
+}
+
+// Erro estilo SDK Anthropic: só o campo `status` importa pra política de retry.
+function erroHttp(status: number): Error & { status: number } {
+  return Object.assign(new Error(`http ${status}`), { status });
 }
 
 const AWAITING: TicketParaClassificar = {
@@ -128,5 +136,62 @@ describe('ClassificarChamadoUseCase', () => {
     const { uc, salvarClassificacao } = montar(null);
     await uc.executar(999);
     expect(salvarClassificacao).not.toHaveBeenCalled();
+  });
+
+  // --- TASK-12: tolerância a falha da IA (RF-05) ---
+  it('falha transitória (429): tenta de novo 1x e no sucesso segue o caminho feliz', async () => {
+    const { uc, classificar, atribuirEAbrir, marcarFalhaEAtribuir, eventos } =
+      montar(AWAITING);
+    classificar
+      .mockRejectedValueOnce(erroHttp(429))
+      .mockResolvedValueOnce(RESULTADO);
+    await uc.executar(42);
+    expect(classificar).toHaveBeenCalledTimes(2);
+    expect(atribuirEAbrir).toHaveBeenCalledWith(42, 5);
+    expect(marcarFalhaEAtribuir).not.toHaveBeenCalled();
+    expect(eventos.map((e) => e.type)).toEqual([
+      'CLASSIFICACAO_IA',
+      'ATRIBUICAO',
+      'MUDANCA_STATUS',
+    ]);
+  });
+
+  it('falha definitiva (401): NÃO tenta de novo, cai direto no fallback manual', async () => {
+    const { uc, classificar, atribuirEAbrir, marcarFalhaEAtribuir, eventos } =
+      montar(AWAITING);
+    classificar.mockRejectedValue(erroHttp(401));
+    await uc.executar(42);
+    expect(classificar).toHaveBeenCalledTimes(1); // sem retry
+    expect(atribuirEAbrir).not.toHaveBeenCalled(); // não abre
+    expect(marcarFalhaEAtribuir).toHaveBeenCalledWith(42, 5); // manual + menor carga
+    expect(eventos.map((e) => e.type)).toEqual(['FALHA_CLASSIFICACAO']);
+    expect(eventos[0].authorId).toBeNull();
+    expect(eventos[0].payload).toMatchObject({ assigneeId: 5 });
+  });
+
+  it('transitório esgotado (429 duas vezes): fica AWAITING, manual pendente e atribuído', async () => {
+    const { uc, classificar, salvarClassificacao, marcarFalhaEAtribuir } =
+      montar(AWAITING);
+    classificar.mockRejectedValue(erroHttp(429));
+    await uc.executar(42);
+    expect(classificar).toHaveBeenCalledTimes(2); // original + 1 retry
+    expect(salvarClassificacao).not.toHaveBeenCalled(); // não classificou
+    expect(marcarFalhaEAtribuir).toHaveBeenCalledWith(42, 5);
+  });
+
+  it('fallback sem funcionário: atribui null e ainda grava FALHA_CLASSIFICACAO', async () => {
+    const {
+      uc,
+      classificar,
+      cargasDosFuncionarios,
+      marcarFalhaEAtribuir,
+      eventos,
+    } = montar(AWAITING);
+    classificar.mockRejectedValue(erroHttp(401));
+    cargasDosFuncionarios.mockResolvedValue([]);
+    await uc.executar(42);
+    expect(marcarFalhaEAtribuir).toHaveBeenCalledWith(42, null);
+    expect(eventos.map((e) => e.type)).toEqual(['FALHA_CLASSIFICACAO']);
+    expect(eventos[0].payload).toMatchObject({ assigneeId: null });
   });
 });
