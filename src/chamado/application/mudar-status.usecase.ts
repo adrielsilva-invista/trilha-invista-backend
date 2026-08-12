@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { TicketStatus } from '../domain/chamado';
 import { podeTransitar, autorizadoATransicionar } from '../domain/transicoes';
+import { RegistrarEventoUseCase } from '../../historico/application/registrar-evento.usecase';
 import type { ChamadoCriado, ChamadoRepository } from './ports';
 import { CHAMADO_REPOSITORY } from './ports';
 
@@ -17,6 +18,7 @@ type PerfilLiteral = 'CLIENTE' | 'FUNCIONARIO' | 'ADMIN';
 export class MudarStatusUseCase {
   constructor(
     @Inject(CHAMADO_REPOSITORY) private readonly chamados: ChamadoRepository,
+    private readonly registrarEvento: RegistrarEventoUseCase,
   ) {}
 
   async executar(
@@ -37,6 +39,14 @@ export class MudarStatusUseCase {
         `Transição inválida: ${chamado.status} → ${para}`,
       );
     }
-    return this.chamados.atualizarStatus(id, para);
+
+    const atualizado = await this.chamados.atualizarStatus(id, para);
+    await this.registrarEvento.executar({
+      ticketId: id,
+      type: 'MUDANCA_STATUS',
+      payload: { de: chamado.status, para },
+      authorId: usuarioId,
+    });
+    return atualizado;
   }
 }
