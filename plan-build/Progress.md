@@ -44,14 +44,14 @@ TASK-06 | [██████████] | Cliente acompanha seus chamados (RF
 Sprint-2 — IA + fila + atribuição + histórico
 TASK-07 | [██████████] | Schema classificação + histórico (RF-04/11) | ✅ CONCLUÍDA (migrate classificacao_historico)
 TASK-08 | [██████████] | Histórico append-only (RF-11)              | ✅ CONCLUÍDA
-TASK-09 | [░░░░░░░░░░] | Fila + worker fake (RF-06)                 | ⬜ A FAZER
+TASK-09 | [██████████] | Fila + worker fake (RF-06)                 | ✅ CONCLUÍDA
 TASK-10 | [░░░░░░░░░░] | Gateway Claude real (RF-04)                | ⬜ A FAZER
 TASK-11 | [░░░░░░░░░░] | Caminho feliz classifica→atribui (RF-04+07)| ⬜ A FAZER
 TASK-12 | [░░░░░░░░░░] | Tolerância a falha (RF-05)                 | ⬜ A FAZER
 TASK-13 | [░░░░░░░░░░] | Reclassificação funcionário (RF-08)        | ⬜ A FAZER
 ```
 
-Progresso geral: Sprint-1 6/6 (100%) ✅ · Sprint-2 2/7 (29%) 🟡
+Progresso geral: Sprint-1 6/6 (100%) ✅ · Sprint-2 3/7 (43%) 🟡
 
 **Resultado dos testes:**
 ```
@@ -380,6 +380,37 @@ jest | 52/52 | domain perfil (3), LoginUseCase (3), PerfilGuard (5), PrismaServi
 
 ---
 
+### Sessão 2026-08-12 — TASK-09 (fila + worker sequencial fake, RF-06)
+
+**Tasks trabalhadas:** TASK-09 (terceira da Sprint-2)
+**Status ao encerrar:** ✅ TASK-09 concluída (código + infra + gate exit 0); branch `feat/fila-worker-fake` pushada, PR/merge a cargo do humano
+
+**O que foi feito:**
+- Módulo `src/classificacao/` no padrão dos demais. `application/ports.ts` concentra contratos (tipos `Categoria/Prioridade/AreaResponsavel/Sentimento/ResultadoClassificacao`, portas `ClassificadorGateway`+`FilaClassificacao`+`ClassificacaoStore` e tokens DI) — sem arquivo domain separado (YAGNI: tipos puros, 1:1 com a porta).
+- `ClassificarChamadoUseCase` (orquestrador ≤20 linhas): rebusca ticket, **reconfirma elegibilidade** (`status === 'AWAITING_CLASSIFICATION'`, senão descarta silenciosamente — cobre CANCELLED/já classificado), classifica via gateway, persiste e **reusa `RegistrarEventoUseCase`** p/ gravar `CLASSIFICACAO_IA` (`authorId: null` = sistema).
+- `infrastructure/`: `BullmqFilaClassificacao` (`add('classificar', {ticketId}, {jobId: String(ticketId)})` — **idempotência de enfileiramento** por ticketId), `ClassificacaoWorker` (`@Processor(..., {concurrency: 1})` = **sequencial**, D-02; delega ao use case), `FakeClassificadorGateway` (`ponytail:` marcado — retorno fixo, **zero chamada à Anthropic**; sobe pra real na TASK-10 trocando só a impl+binding), `PrismaClassificacaoStore` (`buscar` = findFirst id+deletedAt null; `salvarClassificacao` grava `original_*`=`final_*`, `resumo`, `ia_modelo/versao` e transiciona `AWAITING_CLASSIFICATION→OPEN`), `classificacao.constants.ts` (`CLASSIFICACAO_QUEUE` = fonte única do nome da fila).
+- **Wiring**: `AbrirChamadoUseCase` passa a injetar `FILA_CLASSIFICACAO` e **enfileira após persistir** (`executar` async; resposta HTTP **não** espera o worker). `ChamadoModule` importa `ClassificacaoModule`; `ClassificacaoModule` importa `HistoricoModule` (reuso da porta de gravação) + `BullModule.forRoot/registerQueue`; registrado no `app.module.ts`.
+- **Infra (B-02)**: `docker-compose.yml` ganha serviço `redis` (redis:7-alpine, healthcheck `redis-cli ping`); `.env.example` com `REDIS_URL`; `.github/workflows/quality-gate.yml` com service `redis` + `env.REDIS_URL`. `conexaoRedis()` parseia `REDIS_URL` via `URL` stdlib e lança `InternalServerErrorException` se ausente.
+- 60/60 unit (8 novos na subset classificacao); cobertura 66.37→69.52; maior arquivo inalterado (198); duplicação 0; lint 0.
+
+**Decisões:** nenhuma nova arquitetural. Ajuste de tooling no `.harness/collectors/compliance-grep.sh`: adicionado `.fixture.` a `TEST_NAME_MARKERS` (opção A, confirmada pelo humano) — arquivos `*.fixture.ts` são helpers de teste; sem isso `evento.fixture.ts` da TASK-08 disparava falso-positivo `new Date(` na regra de domínio.
+
+**O que ficou pendente:**
+- e2e real do fluxo abrir→enfileirar→worker→OPEN contra Postgres+Redis no ar — pende de Docker, como nas TASKs anteriores. Mecânica coberta por unit (fila, worker, use case, store).
+- Gateway **fake** por design: chamada real ao Claude entra só na TASK-10 (mesma porta, nova impl).
+
+**Próximo passo exato:**
+> Iniciar TASK-10 (gateway Claude real, RF-04) em branch própria a partir da dev. Trocar `FakeClassificadorGateway` por `ClaudeClassificadorGateway` (tool use / JSON Schema forçado, D-01). **Humano põe `ANTHROPIC_API_KEY` no `.env` local ao começar a TASK-10** — key nunca no repo/chat/CI.
+
+**Sensores rodados:**
+- [x] tsc --noEmit — exit 0
+- [x] testes passando (60/60 unit; subset classificacao 5 suites/8 tests)
+- [x] bash .harness/quality-gate.sh — exit 0 (coverage 69.52 / dup 0 / lint 0 / maior arquivo 198 / compliance 0)
+- [x] grep compliance — 0
+- [x] grep secrets — limpo (REDIS_URL só em .env.example, sem credencial)
+
+---
+
 ## Template para próximas sessões
 
 Copiar e preencher ao encerrar a sessão:
@@ -414,8 +445,9 @@ Copiar e preencher ao encerrar a sessão:
 
 ## Próxima Sessão
 
-**Começar em:** **TASK-09** (fila + worker fake, RF-06) — terceira da Sprint-2, planejada em `Sprint-2.md`. Branch `feat/fila-worker-fake` a partir da dev. Adiciona **BullMQ + Redis** (D-02) ao docker-compose/CI + `REDIS_URL` (toca B-02); worker consome a fila com gateway de IA **fake** (zero chamada à Anthropic — a real entra só na TASK-10).
+**Começar em:** **TASK-10** (gateway Claude real, RF-04) — quarta da Sprint-2, planejada em `Sprint-2.md`. Branch própria a partir da dev. Troca `FakeClassificadorGateway` por `ClaudeClassificadorGateway` (Anthropic, D-01) usando **tool use** com JSON Schema forçado (`tool_choice`). Mesma porta `ClassificadorGateway` → é só nova impl + swap de binding no `ClassificacaoModule`. **Humano põe `ANTHROPIC_API_KEY` no `.env` local ao começar** — key nunca no repo/chat/CI. Teste = mock + e2e real opt-in (só bate na Anthropic se a key estiver no ambiente).
 **Contexto crítico:**
+- **TASK-09 ✅ CONCLUÍDA**: módulo `src/classificacao/` — fila BullMQ (`BullmqFilaClassificacao`, idempotência via `jobId=String(ticketId)`) + worker **sequencial** (`@Processor concurrency 1`) delegando a `ClassificarChamadoUseCase`, que **reconfirma elegibilidade** (`AWAITING_CLASSIFICATION`, senão descarta) e **reusa `RegistrarEventoUseCase`** (`CLASSIFICACAO_IA`, authorId null). Gateway **fake** (`FakeClassificadorGateway`, `ponytail:`, zero API) — **é ele que a TASK-10 substitui**. `PrismaClassificacaoStore` transiciona `AWAITING_CLASSIFICATION→OPEN` gravando `original_*`=`final_*`. `AbrirChamadoUseCase` enfileira após persistir (HTTP não espera). Infra B-02: Redis no docker-compose/CI + `REDIS_URL`. 60/60 unit, gate exit 0 (coverage 69.52). Colecter do harness: `.fixture.` agora conta como teste.
 - **TASK-08 ✅ CONCLUÍDA**: módulo `src/historico/` — porta única de gravação `RegistrarEventoUseCase` (as próximas TASKs reusam, nunca duplicam `create`), repo `PrismaHistoricoRepository` **append-only por contrato** (só create/findMany), `GET /chamados/:id/historico` (ADMIN full / FUNCIONARIO restrito ao atribuído, anti-IDOR via token). `MudarStatusUseCase` agora emite `MUDANCA_STATUS` a cada transição (wiring `ChamadoModule`→`HistoricoModule`). Visão restrita = função pura `eventosVisiveisParaFuncionario` (só IA + reclassificação própria, per PRD RF-11). 52/52 unit, gate exit 0 (coverage 68.84). **REUSAR `RegistrarEventoUseCase` nas TASK-09/11/13** para gravar `ATRIBUICAO`/`CLASSIFICACAO_IA`/`RECLASSIFICACAO`/`FALHA_CLASSIFICACAO`.
 - **TASK-07 ✅ CONCLUÍDA**: schema da classificação + histórico migrado (`classificacao_historico`). Enums Categoria/Prioridade/Area/Sentimento/TicketEventType; colunas `original_*` (IA imutável) + `final_*` (editável) + `resumo`≤300 + `ia_modelo`/`ia_versao` + flag `classificacao_manual_pendente` no `Ticket`; model `TicketEvent` append-only (`@@index([ticketId, createdAt])`). Modelagem decidida via squad-vote 2026-08-11_001 → **opção A** (colunas no Ticket, unânime A=3; classificação é 1:1 com Ticket, não coleção → tabela dedicada = YAGNI). **GUARD**: imutabilidade da `original` é invariante de APLICAÇÃO (Postgres não impõe sem trigger) — cobrir no use case + teste nas TASK-11/13.
 - **Sprint-2 planejada**: `Sprint-2.md` escrito com 7 TASKs (07..13) Builder↔Evaluator. Recorte: 07 schema, 08 histórico (RF-11), 09 fila+worker fake (RF-06), 10 gateway Claude real (RF-04), 11 caminho feliz classifica→atribui→OPEN (RF-04+07), 12 tolerância a falha (RF-05), 13 reclassificação funcionário (RF-08). Ordem por dependência.
